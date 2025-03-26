@@ -2,7 +2,7 @@
 import { toast } from "sonner";
 
 // Define the API base URL for server interactions
-const API_BASE_URL = "https://api.your-trading-backend.com";
+const API_BASE_URL = "https://paper-api.alpaca.markets/v2";
 
 // State interfaces
 export interface TradeData {
@@ -69,7 +69,7 @@ export const API = {
     };
   },
   
-  saveApiKeys: async (apiKey: string, secretKey: string): Promise<boolean> => {
+  saveApiKeys: async (apiKey: PKZSR4W608VRJ6E1S7E8, secretKey: GaXUHjaUk6G1LxTfwtdwhNrfGKVslLP7rux7648q): Promise<boolean> => {
     try {
       localStorage.setItem('apiKey', apiKey);
       localStorage.setItem('secretKey', secretKey);
