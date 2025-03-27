@@ -92,6 +92,21 @@ export default function Live() {
       }
     },
   });
+  const { mutate: validateApiKeys, isPending: isValidatingKeys } = useMutation({
+    mutationFn: async () => {
+      return API.validateApiKeys(apiKey, secretKey); // Call API to validate keys
+    },
+    onSuccess: (isValid) => {
+      if (isValid) {
+        toast.success("API keys are valid");
+      } else {
+        toast.error("Invalid API keys. Please check and try again.");
+      }
+    },
+    onError: () => {
+      toast.error("Error validating API keys. Try again later.");
+    },
+  });
 
   // Start trading mutation
   const { mutate: startTrading, isPending: isStarting } = useMutation({
@@ -433,7 +448,7 @@ export default function Live() {
                   )}
                 </div>
                 <Button
-                  onClick={() => saveApiKeys()}
+                  onClick={() => {saveApiKeys(); validateApiKeys()}}
                   disabled={isSavingKeys || (!apiKey || !secretKey)}
                   size="sm"
                 >
