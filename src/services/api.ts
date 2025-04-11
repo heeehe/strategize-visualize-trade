@@ -70,9 +70,7 @@ export const API = {
   
   saveApiKeys: async (apiKey: string, secretKey: string): Promise<boolean> => {
     try {
-      localStorage.setItem('apiKey', apiKey);
-      localStorage.setItem('secretKey', secretKey);
-      return true;
+
     } catch (error) {
       console.error("Failed to save API keys:", error);
       return false;
@@ -81,7 +79,12 @@ export const API = {
 
   validateApiKeys: async (apiKey: string, secretKey: string): Promise<boolean> => {
     try {
+      console.log(apiKey,secretKey)
       const response = await axios.post(`${API_BASE_URL}/api/validate-keys`, { apiKey, secretKey });
+      if(response.data.isValid){
+        localStorage.setItem('apiKey', apiKey);
+      localStorage.setItem('secretKey', secretKey);
+      }
 
       return response.data.isValid; // Assuming the server returns { isValid: true/false }
     } catch (error) {
@@ -91,17 +94,61 @@ export const API = {
   },
   
   // Symbols
-  getAvailableSymbols: async (): Promise<Symbol[]> => {
-    // This would fetch from your backend
+  // getAvailableSymbols: async (): Promise<Symbol[]> => {
+  //   // This would fetch from your backend
+  //   return [
+  //     { symbol: 'AAPL', name: 'Apple Inc.', type: 'stock', exchange: 'NASDAQ' },
+  //     { symbol: 'MSFT', name: 'Microsoft Corporation', type: 'stock', exchange: 'NASDAQ' },
+  //     { symbol: 'GOOGL', name: 'Alphabet Inc.', type: 'stock', exchange: 'NASDAQ' },
+  //     { symbol: 'AMZN', name: 'Amazon.com Inc.', type: 'stock', exchange: 'NASDAQ' },
+  //     { symbol: 'TSLA', name: 'Tesla, Inc.', type: 'stock', exchange: 'NASDAQ' },
+  //     { symbol: 'META', name: 'Meta Platforms Inc.', type: 'stock', exchange: 'NASDAQ' }
+  //   ];
+  // },
+  getAvailableCategories: async (): Promise<{ category: string, stocks: Symbol[] }[]> => {
     return [
-      { symbol: 'AAPL', name: 'Apple Inc.', type: 'stock', exchange: 'NASDAQ' },
-      { symbol: 'MSFT', name: 'Microsoft Corporation', type: 'stock', exchange: 'NASDAQ' },
-      { symbol: 'GOOGL', name: 'Alphabet Inc.', type: 'stock', exchange: 'NASDAQ' },
-      { symbol: 'AMZN', name: 'Amazon.com Inc.', type: 'stock', exchange: 'NASDAQ' },
-      { symbol: 'TSLA', name: 'Tesla, Inc.', type: 'stock', exchange: 'NASDAQ' },
-      { symbol: 'META', name: 'Meta Platforms Inc.', type: 'stock', exchange: 'NASDAQ' }
+      {
+        category: 'Big Tech',
+        stocks: [
+          { symbol: 'AAPL', name: 'Apple Inc.', type: 'stock', exchange: 'NASDAQ' },
+          { symbol: 'MSFT', name: 'Microsoft Corporation', type: 'stock', exchange: 'NASDAQ' },
+          { symbol: 'GOOGL', name: 'Alphabet Inc.', type: 'stock', exchange: 'NASDAQ' },
+          { symbol: 'AMZN', name: 'Amazon.com Inc.', type: 'stock', exchange: 'NASDAQ' },
+          { symbol: 'META', name: 'Meta Platforms Inc.', type: 'stock', exchange: 'NASDAQ' }
+        ]
+      },
+      {
+        category: 'AI & Semiconductors',
+        stocks: [
+          { symbol: 'NVDA', name: 'NVIDIA Corporation', type: 'stock', exchange: 'NASDAQ' },
+          { symbol: 'AMD', name: 'Advanced Micro Devices, Inc.', type: 'stock', exchange: 'NASDAQ' },
+          { symbol: 'TSM', name: 'Taiwan Semiconductor Manufacturing Company', type: 'stock', exchange: 'NYSE' },
+          { symbol: 'INTC', name: 'Intel Corporation', type: 'stock', exchange: 'NASDAQ' }
+        ]
+      },
+      {
+        category: 'Electric Vehicles',
+        stocks: [
+          { symbol: 'TSLA', name: 'Tesla, Inc.', type: 'stock', exchange: 'NASDAQ' },
+          { symbol: 'NIO', name: 'NIO Inc.', type: 'stock', exchange: 'NYSE' },
+          { symbol: 'RIVN', name: 'Rivian Automotive, Inc.', type: 'stock', exchange: 'NASDAQ' },
+          { symbol: 'LCID', name: 'Lucid Group, Inc.', type: 'stock', exchange: 'NASDAQ' }
+        ]
+      },
+      {
+        category: 'Banking Giants',
+        stocks: [
+          { symbol: 'JPM', name: 'JPMorgan Chase & Co.', type: 'stock', exchange: 'NYSE' },
+          { symbol: 'BAC', name: 'Bank of America Corporation', type: 'stock', exchange: 'NYSE' },
+          { symbol: 'C', name: 'Citigroup Inc.', type: 'stock', exchange: 'NYSE' },
+          { symbol: 'GS', name: 'Goldman Sachs Group, Inc.', type: 'stock', exchange: 'NYSE' },
+          { symbol: 'WFC', name: 'Wells Fargo & Company', type: 'stock', exchange: 'NYSE' }
+        ]
+      }
+      // Add more categories if needed
     ];
   },
+
   
   // Strategies
   getAvailableStrategies: async (): Promise<Strategy[]> => {
@@ -170,7 +217,7 @@ export const API = {
   
   // Backtesting
   runBacktest: async (
-    symbol: string, 
+    selectedCategory: string, 
     strategyId: string, 
     params: Record<string, any>, 
     startDate: string, 
@@ -180,96 +227,17 @@ export const API = {
     try {
       toast.info("Running backtest...");
       
-      // This would be a real API call in a production app
-      // For now, simulate a delay and return mock data
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Mock result with somewhat realistic data
-      const startTimestamp = new Date(startDate).getTime();
-      const endTimestamp = new Date(endDate).getTime();
-      const dayDiff = Math.floor((endTimestamp - startTimestamp) / (1000 * 60 * 60 * 24));
-      
-      // Generate mock equity curve
-      const equityCurve = [];
-      let currentValue = initialCapital;
-      let currentDate = new Date(startDate);
-      
-      const dailyReturns = [];
-      const trades = [];
-      
-      // Generate some random trades
-      const numTrades = Math.floor(dayDiff / 7); // Roughly one trade per week
-      let totalProfit = 0;
-      let wins = 0;
-      
-      for (let i = 0; i < dayDiff; i++) {
-        // Skip weekends
-        if (currentDate.getDay() === 0 || currentDate.getDay() === 6) {
-          currentDate = new Date(currentDate.getTime() + 24 * 60 * 60 * 1000);
-          continue;
-        }
-        
-        const dateStr = currentDate.toISOString().split('T')[0];
-        
-        // Add some randomness to the equity curve
-        const dailyChange = (Math.random() * 2 - 0.5) * (initialCapital * 0.01);
-        currentValue += dailyChange;
-        
-        equityCurve.push({ date: dateStr, value: currentValue });
-        dailyReturns.push({ date: dateStr, value: dailyChange / currentValue * 100 });
-        
-        // Generate some trades
-        if (Math.random() < 0.15 && trades.length < numTrades) {
-          const isBuy = trades.length % 2 === 0;
-          const price = 100 + Math.random() * 50;
-          const quantity = Math.floor(Math.random() * 100) + 10;
-          
-          if (isBuy) {
-            trades.push({
-              date: dateStr,
-              type: 'buy',
-              price,
-              quantity
-            });
-          } else {
-            const profit = (price - trades[trades.length - 1].price) * quantity;
-            totalProfit += profit;
-            if (profit > 0) wins++;
-            
-            trades.push({
-              date: dateStr,
-              type: 'sell',
-              price,
-              quantity,
-              profit
-            });
-          }
-        }
-        
-        currentDate = new Date(currentDate.getTime() + 24 * 60 * 60 * 1000);
-      }
-      
-      // Ensure final value reflects total profit
-      const finalCapital = initialCapital + totalProfit;
-      
-      return {
-        symbol,
+      const response = await axios.post(`${API_BASE_URL}/api/backtest`, {
+        selectedCategory,
+        strategyId,
+        params,
         startDate,
         endDate,
-        initialCapital,
-        finalCapital,
-        performance: {
-          totalReturn: ((finalCapital - initialCapital) / initialCapital) * 100,
-          sharpeRatio: 1.2 + Math.random() * 0.8,
-          maxDrawdown: -(5 + Math.random() * 10),
-          winRate: (wins / (trades.length / 2)) * 100,
-          tradesCount: trades.length
-        },
-        trades,
-        equityCurve,
-        dailyReturns
-      };
-    } catch (error) {
+        initialCapital
+      });
+  
+      return response.data; 
+    } catch (error) {0
       console.error("Backtest failed:", error);
       toast.error("Backtest failed. Please try again.");
       throw error;

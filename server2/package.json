@@ -12,8 +12,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "babel-runtime": "^6.26.0",
     "cors": "^2.8.5",
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "pandas-js": "^0.2.4",
+    "ta-lib": "^0.11.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.9"

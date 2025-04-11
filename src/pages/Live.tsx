@@ -448,7 +448,7 @@ export default function Live() {
                   )}
                 </div>
                 <Button
-                  onClick={() => {saveApiKeys(); validateApiKeys()}}
+                  onClick={() => {validateApiKeys()}}
                   disabled={isSavingKeys || (!apiKey || !secretKey)}
                   size="sm"
                 >
