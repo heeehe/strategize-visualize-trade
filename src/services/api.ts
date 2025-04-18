@@ -1,233 +1,128 @@
-import { toast } from "sonner";
-import axios from "axios"
-// Define the API base URL for server interactions
-const API_BASE_URL = "http://localhost:3000";
+import axios from 'axios';
+import { BacktestResult, Strategy } from '@/types';
 
-// State interfaces
-export interface TradeData {
-  date: string;
-  type: 'buy' | 'sell';
-  price: number;
-  quantity: number;
-  profit?: number;
-}
+const API_URL = 'http://localhost:3000/api';
 
-export interface PerformanceData {
-  totalReturn: number;
-  sharpeRatio: number;
-  maxDrawdown: number;
-  winRate: number;
-  tradesCount: number;
-}
-
-export interface BacktestResult {
-  symbol: string;
-  startDate: string;
-  endDate: string;
-  initialCapital: number;
-  finalCapital: number;
-  performance: PerformanceData;
-  trades: TradeData[];
-  equityCurve: {date: string, value: number}[];
-  dailyReturns: {date: string, value: number}[];
-}
-
-export interface StrategyParam {
-  name: string;
-  type: 'number' | 'boolean' | 'string' | 'select';
-  value: any;
-  min?: number;
-  max?: number;
-  step?: number;
-  options?: string[];
-  description: string;
-}
-
-export interface Strategy {
-  id: string;
-  name: string;
-  description: string;
-  params: StrategyParam[];
-}
-
-export interface Symbol {
-  symbol: string;
-  name: string;
-  type: string;
-  exchange: string;
-}
-
-// Mock API functions for now - would be replaced with actual API calls
 export const API = {
-  // Auth
-  getApiKeys: async (): Promise<{apiKey: string, secretKey: string}> => {
-    // In a real app, these would be retrieved from secure storage
-    return {
-      apiKey: localStorage.getItem('apiKey') || '',
-      secretKey: localStorage.getItem('secretKey') || ''
-    };
-  },
-  
-  saveApiKeys: async (apiKey: string, secretKey: string): Promise<boolean> => {
+  getAvailableSymbols: async (): Promise<Symbol[]> => {
     try {
-
+      const response = await axios.get(`${API_URL}/symbols`);
+      return response.data;
     } catch (error) {
-      console.error("Failed to save API keys:", error);
-      return false;
+      console.error('Error fetching symbols:', error);
+      return [];
     }
   },
 
-  validateApiKeys: async (apiKey: string, secretKey: string): Promise<boolean> => {
+  getAvailableCategories: async (): Promise<{ category: string }[]> => {
     try {
-      console.log(apiKey,secretKey)
-      const response = await axios.post(`${API_BASE_URL}/api/validate-keys`, { apiKey, secretKey });
-      if(response.data.isValid){
-        localStorage.setItem('apiKey', apiKey);
-      localStorage.setItem('secretKey', secretKey);
-      }
-
-      return response.data.isValid; // Assuming the server returns { isValid: true/false }
+      const response = await axios.get(`${API_URL}/categories`);
+      return response.data;
     } catch (error) {
-      console.error("API key validation failed:", error);
-      return false;
+      console.error('Error fetching categories:', error);
+      return [
+        { category: 'Big Tech' },
+        { category: 'AI & Semiconductors' },
+        { category: 'Electric Vehicles' },
+        { category: 'Banking Giants' },
+        { category: 'Indian IT' }
+      ];
     }
   },
-  
-  // Symbols
-  // getAvailableSymbols: async (): Promise<Symbol[]> => {
-  //   // This would fetch from your backend
-  //   return [
-  //     { symbol: 'AAPL', name: 'Apple Inc.', type: 'stock', exchange: 'NASDAQ' },
-  //     { symbol: 'MSFT', name: 'Microsoft Corporation', type: 'stock', exchange: 'NASDAQ' },
-  //     { symbol: 'GOOGL', name: 'Alphabet Inc.', type: 'stock', exchange: 'NASDAQ' },
-  //     { symbol: 'AMZN', name: 'Amazon.com Inc.', type: 'stock', exchange: 'NASDAQ' },
-  //     { symbol: 'TSLA', name: 'Tesla, Inc.', type: 'stock', exchange: 'NASDAQ' },
-  //     { symbol: 'META', name: 'Meta Platforms Inc.', type: 'stock', exchange: 'NASDAQ' }
-  //   ];
-  // },
-  getAvailableCategories: async (): Promise<{ category: string, stocks: Symbol[] }[]> => {
-    return [
-      {
-        category: 'Big Tech',
-        stocks: [
-          { symbol: 'AAPL', name: 'Apple Inc.', type: 'stock', exchange: 'NASDAQ' },
-          { symbol: 'MSFT', name: 'Microsoft Corporation', type: 'stock', exchange: 'NASDAQ' },
-          { symbol: 'GOOGL', name: 'Alphabet Inc.', type: 'stock', exchange: 'NASDAQ' },
-          { symbol: 'AMZN', name: 'Amazon.com Inc.', type: 'stock', exchange: 'NASDAQ' },
-          { symbol: 'META', name: 'Meta Platforms Inc.', type: 'stock', exchange: 'NASDAQ' }
-        ]
-      },
-      {
-        category: 'AI & Semiconductors',
-        stocks: [
-          { symbol: 'NVDA', name: 'NVIDIA Corporation', type: 'stock', exchange: 'NASDAQ' },
-          { symbol: 'AMD', name: 'Advanced Micro Devices, Inc.', type: 'stock', exchange: 'NASDAQ' },
-          { symbol: 'TSM', name: 'Taiwan Semiconductor Manufacturing Company', type: 'stock', exchange: 'NYSE' },
-          { symbol: 'INTC', name: 'Intel Corporation', type: 'stock', exchange: 'NASDAQ' }
-        ]
-      },
-      {
-        category: 'Electric Vehicles',
-        stocks: [
-          { symbol: 'TSLA', name: 'Tesla, Inc.', type: 'stock', exchange: 'NASDAQ' },
-          { symbol: 'NIO', name: 'NIO Inc.', type: 'stock', exchange: 'NYSE' },
-          { symbol: 'RIVN', name: 'Rivian Automotive, Inc.', type: 'stock', exchange: 'NASDAQ' },
-          { symbol: 'LCID', name: 'Lucid Group, Inc.', type: 'stock', exchange: 'NASDAQ' }
-        ]
-      },
-      {
-        category: 'Banking Giants',
-        stocks: [
-          { symbol: 'JPM', name: 'JPMorgan Chase & Co.', type: 'stock', exchange: 'NYSE' },
-          { symbol: 'BAC', name: 'Bank of America Corporation', type: 'stock', exchange: 'NYSE' },
-          { symbol: 'C', name: 'Citigroup Inc.', type: 'stock', exchange: 'NYSE' },
-          { symbol: 'GS', name: 'Goldman Sachs Group, Inc.', type: 'stock', exchange: 'NYSE' },
-          { symbol: 'WFC', name: 'Wells Fargo & Company', type: 'stock', exchange: 'NYSE' }
-        ]
-      }
-      // Add more categories if needed
-    ];
-  },
 
-  
-  // Strategies
   getAvailableStrategies: async (): Promise<Strategy[]> => {
-    return [
-      {
-        id: 'sma-cross',
-        name: 'SMA Crossover',
-        description: 'Strategy based on the crossover of two Simple Moving Averages',
-        params: [
-          {
-            name: 'fast_period',
-            type: 'number',
-            value: 10,
-            min: 2,
-            max: 50,
-            step: 1,
-            description: 'Period for the fast SMA'
-          },
-          {
-            name: 'slow_period',
-            type: 'number',
-            value: 30,
-            min: 5,
-            max: 200,
-            step: 1,
-            description: 'Period for the slow SMA'
-          }
-        ]
-      },
-      {
-        id: 'rsi-strategy',
-        name: 'RSI Strategy',
-        description: 'Buy when RSI is oversold, sell when overbought',
-        params: [
-          {
-            name: 'rsi_period',
-            type: 'number',
-            value: 14,
-            min: 2,
-            max: 50,
-            step: 1,
-            description: 'Period for the RSI calculation'
-          },
-          {
-            name: 'oversold',
-            type: 'number',
-            value: 30,
-            min: 10,
-            max: 40,
-            step: 1,
-            description: 'Oversold level'
-          },
-          {
-            name: 'overbought',
-            type: 'number',
-            value: 70,
-            min: 60,
-            max: 90,
-            step: 1,
-            description: 'Overbought level'
-          }
-        ]
-      }
-    ];
-  },
-  
-  // Backtesting
-  runBacktest: async (
-    selectedCategory: string, 
-    strategyId: string, 
-    params: Record<string, any>, 
-    startDate: string, 
-    endDate: string, 
-    initialCapital: number
-  ): Promise<BacktestResult> => {
     try {
-      toast.info("Running backtest...");
-      
-      const response = await axios.post(`${API_BASE_URL}/api/backtest`, {
+      const response = await axios.get(`${API_URL}/strategies`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching strategies:', error);
+      return [
+        {
+          id: 'moving_average_crossover',
+          name: 'Moving Average Crossover',
+          description: 'A strategy that generates signals based on the crossing of two moving averages',
+          params: [
+            {
+              name: 'riskPerTrade',
+              type: 'number',
+              value: 2,
+              min: 0.1,
+              max: 10,
+              step: 0.1,
+              description: 'Percentage of account to risk per trade'
+            },
+            {
+              name: 'stopLossPercent',
+              type: 'number',
+              value: 2,
+              min: 0.5,
+              max: 10,
+              step: 0.5,
+              description: 'Stop loss percentage from entry price'
+            },
+            {
+              name: 'takeProfitPercent',
+              type: 'number',
+              value: 4,
+              min: 1,
+              max: 20,
+              step: 0.5,
+              description: 'Take profit percentage from entry price'
+            }
+          ]
+        },
+        {
+          id: 'rsi_strategy',
+          name: 'RSI Strategy',
+          description: 'A strategy that generates signals based on RSI overbought/oversold conditions',
+          params: [
+            {
+              name: 'riskPerTrade',
+              type: 'number',
+              value: 2,
+              min: 0.1,
+              max: 10,
+              step: 0.1,
+              description: 'Percentage of account to risk per trade'
+            },
+            {
+              name: 'stopLossPercent',
+              type: 'number',
+              value: 2,
+              min: 0.5,
+              max: 10,
+              step: 0.5,
+              description: 'Stop loss percentage from entry price'
+            },
+            {
+              name: 'takeProfitPercent',
+              type: 'number',
+              value: 4,
+              min: 1,
+              max: 20,
+              step: 0.5,
+              description: 'Take profit percentage from entry price'
+            }
+          ]
+        }
+      ];
+    }
+  },
+
+  runBacktest: async (
+    selectedCategory: string,
+    strategyId: string,
+    params: {
+      riskPerTrade: number;
+      stopLossPercent: number;
+      takeProfitPercent: number;
+    },
+    startDate: string,
+    endDate: string,
+    initialCapital: number
+  ): Promise<{ results: BacktestResult[] }> => {
+    try {
+      const response = await axios.post(`${API_URL}/backtest`, {
         selectedCategory,
         strategyId,
         params,
@@ -235,68 +130,71 @@ export const API = {
         endDate,
         initialCapital
       });
-  
-      return response.data; 
-    } catch (error) {0
-      console.error("Backtest failed:", error);
-      toast.error("Backtest failed. Please try again.");
+      return response.data;
+    } catch (error) {
+      console.error('Error running backtest:', error);
       throw error;
     }
   },
-  
-  // Live Trading
+
   startLiveTrading: async (
     symbol: string,
     strategyId: string,
     params: Record<string, any>
   ): Promise<boolean> => {
     try {
-      // This would connect to your backend to start the live trading
-      toast.info(`Starting live trading for ${symbol}...`);
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      toast.success(`Live trading started for ${symbol}`);
-      return true;
+      const response = await axios.post(`${API_URL}/live-trading/start`, {
+        symbol,
+        strategyId,
+        params
+      });
+      return response.data.success;
     } catch (error) {
-      console.error("Failed to start live trading:", error);
-      toast.error("Failed to start live trading. Please check your API keys and try again.");
+      console.error('Error starting live trading:', error);
       return false;
     }
   },
-  
-  stopLiveTrading: async (): Promise<boolean> => {
+
+  stopLiveTrading: async (tradingId: string): Promise<boolean> => {
     try {
-      toast.info("Stopping live trading...");
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      toast.success("Live trading stopped");
-      return true;
+      const response = await axios.post(`${API_URL}/live-trading/stop`, {
+        tradingId
+      });
+      return response.data.success;
     } catch (error) {
-      console.error("Failed to stop live trading:", error);
-      toast.error("Failed to stop live trading");
+      console.error('Error stopping live trading:', error);
       return false;
     }
   },
-  
-  getTradingStatus: async (): Promise<{
-    isActive: boolean;
-    symbol?: string;
-    strategy?: string;
-    startTime?: string;
-    position?: { type: 'long' | 'short' | 'none'; quantity: number; entryPrice?: number };
-  }> => {
-    // Check if trading is active
-    const randomActive = Math.random() > 0.5;
-    if (!randomActive) return { isActive: false };
-    
-    return {
-      isActive: true,
-      symbol: 'AAPL',
-      strategy: 'SMA Crossover',
-      startTime: new Date().toISOString(),
-      position: {
-        type: Math.random() > 0.3 ? 'long' : 'none',
-        quantity: Math.floor(Math.random() * 100) + 10,
-        entryPrice: Math.random() > 0.5 ? 150 + Math.random() * 20 : undefined
-      }
-    };
+
+  getLiveTradingStatus: async (): Promise<any[]> => {
+    try {
+      const response = await axios.get(`${API_URL}/live-trading/status`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching live trading status:', error);
+      return [];
+    }
+  },
+
+  validateApiKeys: async (exchange: string, apiKey: string, apiSecret: string): Promise<boolean> => {
+    try {
+      const response = await axios.post(`${API_URL}/validate-keys`, {
+        exchange,
+        apiKey,
+        apiSecret
+      });
+      return response.data.valid;
+    } catch (error) {
+      console.error('Error validating API keys:', error);
+      return false;
+    }
   }
+};
+
+export type Symbol = {
+  symbol: string;
+  name: string;
+  exchange: string;
+  type: string;
 };

@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,7 +22,11 @@ export default function Backtest() {
   const [startDate, setStartDate] = useState("2022-01-01");
   const [endDate, setEndDate] = useState("2023-01-01");
   const [initialCapital, setInitialCapital] = useState(10000);
-  const [strategyParams, setStrategyParams] = useState<Record<string, any>>({});
+  const [strategyParams, setStrategyParams] = useState<Record<string, any>>({
+    riskPerTrade: 2,
+    stopLossPercent: 2,
+    takeProfitPercent: 4
+  });
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
 
@@ -46,22 +49,19 @@ export default function Backtest() {
   });
 
   // Find the selected strategy
-  const selectedStrategy = strategies.find(s => s.id === strategyId);
+  const selectedStrategy = strategies.find((s: Strategy) => s.id === strategyId);
 
   // Handle strategy change
   const handleStrategyChange = (id: string) => {
-    setStrategyId(id);
-    
-    // Initialize parameters with default values
-    const strategy = strategies.find(s => s.id === id);
-    if (strategy) {
-      const initialParams: Record<string, any> = {};
-      strategy.params.forEach(param => {
-        initialParams[param.name] = param.value;
-      });
-      setStrategyParams(initialParams);
-    }
-  };
+  setStrategyId(id);
+  
+  // Initialize parameters with default values for risk management
+  setStrategyParams({
+    riskPerTrade: 2,
+    stopLossPercent: 2,
+    takeProfitPercent: 4
+  });
+};
 
   // Handle parameter change
   const handleParamChange = (name: string, value: any) => {
@@ -257,62 +257,72 @@ export default function Backtest() {
               </div>
 
               {/* Strategy Parameters */}
-              {selectedStrategy && selectedStrategy.params.length > 0 && (
-                <>
-                  <div className="border-t pt-6 mt-6">
-                    <h3 className="text-lg font-medium mb-4">Strategy Parameters</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {selectedStrategy.params.map((param) => (
-                        <div key={param.name} className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <Label htmlFor={param.name}>{param.name.replace(/_/g, ' ')}</Label>
-                            <div className="relative group">
-                              <Info className="h-4 w-4 text-muted-foreground cursor-help" />
-                              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-48 p-2 bg-popover text-popover-foreground text-xs rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-50">
-                                {param.description}
-                              </div>
-                            </div>
+              {selectedStrategy && (
+                <div className="border-t pt-6 mt-6">
+                  <h3 className="text-lg font-medium mb-4">Strategy Parameters</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="riskPerTrade">Risk Per Trade (%)</Label>
+                        <div className="relative group">
+                          <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-48 p-2 bg-popover text-popover-foreground text-xs rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-50">
+                            Percentage of account to risk per trade
                           </div>
-                          {param.type === 'number' ? (
-                            <div className="flex items-center gap-2">
-                              <Input
-                                id={param.name}
-                                type="number"
-                                min={param.min}
-                                max={param.max}
-                                step={param.step || 1}
-                                value={strategyParams[param.name] || param.value}
-                                onChange={(e) => handleParamChange(param.name, Number(e.target.value))}
-                              />
-                            </div>
-                          ) : param.type === 'select' && param.options ? (
-                            <Select 
-                              value={strategyParams[param.name]?.toString() || param.value?.toString()}
-                              onValueChange={(v) => handleParamChange(param.name, v)}
-                            >
-                              <SelectTrigger id={param.name}>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {param.options.map((option) => (
-                                  <SelectItem key={option} value={option}>
-                                    {option}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <Input
-                              id={param.name}
-                              value={strategyParams[param.name] || param.value}
-                              onChange={(e) => handleParamChange(param.name, e.target.value)}
-                            />
-                          )}
                         </div>
-                      ))}
+                      </div>
+                      <Input
+                        id="riskPerTrade"
+                        type="number"
+                        min={0.1}
+                        max={10}
+                        step={0.1}
+                        value={strategyParams.riskPerTrade}
+                        onChange={(e) => handleParamChange('riskPerTrade', Number(e.target.value))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="stopLossPercent">Stop Loss (%)</Label>
+                        <div className="relative group">
+                          <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-48 p-2 bg-popover text-popover-foreground text-xs rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-50">
+                            Stop loss percentage from entry price
+                          </div>
+                        </div>
+                      </div>
+                      <Input
+                        id="stopLossPercent"
+                        type="number"
+                        min={0.5}
+                        max={10}
+                        step={0.5}
+                        value={strategyParams.stopLossPercent}
+                        onChange={(e) => handleParamChange('stopLossPercent', Number(e.target.value))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="takeProfitPercent">Take Profit (%)</Label>
+                        <div className="relative group">
+                          <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-48 p-2 bg-popover text-popover-foreground text-xs rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-50">
+                            Take profit percentage from entry price
+                          </div>
+                        </div>
+                      </div>
+                      <Input
+                        id="takeProfitPercent"
+                        type="number"
+                        min={1}
+                        max={20}
+                        step={0.5}
+                        value={strategyParams.takeProfitPercent}
+                        onChange={(e) => handleParamChange('takeProfitPercent', Number(e.target.value))}
+                      />
                     </div>
                   </div>
-                </>
+                </div>
               )}
 
               <div className="flex justify-end pt-4">
