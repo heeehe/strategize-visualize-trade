@@ -13,10 +13,16 @@
   "license": "ISC",
   "dependencies": {
     "babel-runtime": "^6.26.0",
+    "backtest": "^0.2.3",
     "cors": "^2.8.5",
+    "dukascopy-node": "^1.42.1",
     "express": "^4.21.2",
+    "moment": "^2.30.1",
+    "node-addon-api": "^8.3.1",
     "pandas-js": "^0.2.4",
-    "ta-lib": "^0.11.0"
+    "ta-lib": "^0.11.0",
+    "technicalindicators": "^3.1.0",
+    "yahoo-finance2": "^2.13.3"
   },
   "devDependencies": {
     "nodemon": "^3.1.9"

@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +15,7 @@ import { toast } from "sonner";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LineChart, Line, BarChart, Bar } from "recharts";
 import { Link } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -23,47 +25,35 @@ export default function Backtest() {
   const [startDate, setStartDate] = useState("2022-01-01");
   const [endDate, setEndDate] = useState("2023-01-01");
   const [initialCapital, setInitialCapital] = useState(10000);
-  const [strategyParams, setStrategyParams] = useState<Record<string, any>>({});
+  const [strategyParams, setStrategyParams] = useState<Record<string, any>>({
+    riskPerTrade: 2,
+    stopLossPercent: 2,
+    takeProfitPercent: 4
+  });
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
 
-  // Fetch available symbols
-  // const { data: symbols = [], isLoading: isLoadingSymbols } = useQuery({
-  //   queryKey: ['symbols'],
-  //   queryFn: API.getAvailableSymbols,
-  // });
-  
   const { data: categories = [], isLoading: isLoadingCategories } = useQuery({
     queryKey: ['categories'],
     queryFn: API.getAvailableCategories, 
   });
 
-
-  // Fetch available strategies
   const { data: strategies = [], isLoading: isLoadingStrategies } = useQuery({
     queryKey: ['strategies'],
     queryFn: API.getAvailableStrategies,
   });
 
-  // Find the selected strategy
-  const selectedStrategy = strategies.find(s => s.id === strategyId);
+  const selectedStrategy = strategies.find((s: Strategy) => s.id === strategyId);
 
-  // Handle strategy change
   const handleStrategyChange = (id: string) => {
     setStrategyId(id);
-    
-    // Initialize parameters with default values
-    const strategy = strategies.find(s => s.id === id);
-    if (strategy) {
-      const initialParams: Record<string, any> = {};
-      strategy.params.forEach(param => {
-        initialParams[param.name] = param.value;
-      });
-      setStrategyParams(initialParams);
-    }
+    setStrategyParams({
+      riskPerTrade: 0.02,
+      stopLossPercent: 0.05,
+      takeProfitPercent: 0.1
+    });
   };
 
-  // Handle parameter change
   const handleParamChange = (name: string, value: any) => {
     setStrategyParams(prev => ({
       ...prev,
@@ -71,14 +61,12 @@ export default function Backtest() {
     }));
   };
 
-  // Run backtest mutation
   const { mutate: runBacktest, isPending: isRunningBacktest } = useMutation({
     mutationFn: async () => {
       if (!selectedCategory || !strategyId || !startDate || !endDate) {
         toast.error("Please fill in all required fields");
         return null;
       }
-      
       return API.runBacktest(
         selectedCategory,
         strategyId,
@@ -89,30 +77,42 @@ export default function Backtest() {
       );
     },
     onSuccess: (data) => {
-      // if (data) {
-      //   setBacktestResult(data);
-      //   toast.success("Backtest completed successfully");
-      // }
       if (data?.results?.[0]) {
-        const result =data.results[0];
+        // Convert numeric string dates to numbers before setting state
+        const rawResult = data.results[0];
+        const equityCurve = (rawResult.equityCurve || []).map((pt: any) => ({
+          ...pt,
+          date: Number(pt.date)
+        }));
+        const dailyReturns = (rawResult.dailyReturns || []).map((pt: any) => ({
+          ...pt,
+          date: Number(pt.date)
+        }));
+        const trades = (rawResult.trades || []).map((tr: any) => ({
+          ...tr,
+          date: Number(tr.date)
+        }));
+        const result: BacktestResult = { 
+          ...rawResult, 
+          equityCurve, 
+          dailyReturns, 
+          trades 
+        };
         setBacktestResult(result);
         toast.success("Backtest completed successfully");
-  
-        const { finalCapital, performance, trades, equityCurve, dailyReturns } = data;
-  
-        // Display key backtest summary using toast
+
+        const { finalCapital, performance } = result;
+
         toast.info(`📈 Final Capital: $${finalCapital.toFixed(2)}`);
         toast.info(`💰 Total Return: ${performance.totalReturn.toFixed(2)}%`);
         toast.info(`🏆 Win Rate: ${performance.winRate.toFixed(2)}%`);
         toast.info(`📊 Sharpe Ratio: ${performance.sharpeRatio.toFixed(2)}`);
         toast.info(`📉 Max Drawdown: ${performance.maxDrawdown.toFixed(2)}%`);
         toast.info(`🔄 Total Trades: ${performance.tradesCount}`);
-  
-        // Log trades, equity curve, and daily returns for detailed analysis
+
         console.log("📜 Backtest Summary:", result);
-        console.table(result.trades);       // Logs all trades in a table format
-        console.table(result.equityCurve);  // Logs equity curve data
-        //console.table(dailyReturns); // Logs daily returns data
+        console.table(result.trades);
+        console.table(result.equityCurve);
       }
     },
     onError: () => {
@@ -120,7 +120,6 @@ export default function Backtest() {
     }
   });
 
-  // Format currency
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -128,16 +127,13 @@ export default function Backtest() {
     }).format(value);
   };
 
-  // Start live trading with current strategy
   const handleStartLiveTrading = async () => {
     if (!backtestResult) return;
-    
     const success = await API.startLiveTrading(
       backtestResult.symbol,
       strategyId,
       strategyParams
     );
-    
     if (success) {
       toast.success("Live trading started successfully");
     }
@@ -153,17 +149,11 @@ export default function Backtest() {
           </div>
           {backtestResult && (
             <div className="flex gap-3">
-              <Button 
-                variant="outline" 
-                onClick={() => setBacktestResult(null)}
-              >
+              <Button variant="outline" onClick={() => setBacktestResult(null)}>
                 New Backtest
               </Button>
               <Link to="/live">
-                <Button 
-                  className="gap-2"
-                  onClick={handleStartLiveTrading}
-                >
+                <Button className="gap-2" onClick={handleStartLiveTrading}>
                   <ArrowRight className="w-4 h-4" /> Start Live Trading
                 </Button>
               </Link>
@@ -172,171 +162,182 @@ export default function Backtest() {
         </div>
 
         {!backtestResult ? (
-          <Card className="shadow-sm animate-fade-in">
-            <CardHeader>
-              <CardTitle>Backtest Configuration</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Symbol Selection */}
-                <div className="space-y-2">
-                  <Label htmlFor="category">Category</Label>
-                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                    <SelectTrigger id="category">
-                      <SelectValue placeholder="Select a category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {isLoadingCategories ? (
-                        <div className="flex items-center justify-center p-4">
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                        </div>
-                      ) : (
-                        categories.map((c) => (
-                          <SelectItem key={c.category} value={c.category}>
-                            {c.category}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
+          <>
+            {/* Selection inputs */}
+            <Card className="shadow-sm animate-fade-in">
+              <CardHeader>
+                <CardTitle>Backtest Configuration</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Category Selection */}
+                  <div className="space-y-2">
+                    <Label htmlFor="category">Category</Label>
+                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                      <SelectTrigger id="category">
+                        <SelectValue placeholder="Select a category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {isLoadingCategories ? (
+                          <div className="flex items-center justify-center p-4">
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                          </div>
+                        ) : (
+                          categories.map((c: any) => (
+                            <SelectItem key={c.category} value={c.category}>
+                              {c.category}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Strategy Selection */}
+                  <div className="space-y-2">
+                    <Label htmlFor="strategy">Strategy</Label>
+                    <Select value={strategyId} onValueChange={handleStrategyChange}>
+                      <SelectTrigger id="strategy">
+                        <SelectValue placeholder="Select a strategy" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {isLoadingStrategies ? (
+                          <div className="flex items-center justify-center p-4">
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                          </div>
+                        ) : (
+                          strategies.map((s: Strategy) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Date Range */}
+                  <div className="space-y-2">
+                    <Label htmlFor="startDate">Start Date</Label>
+                    <Input
+                      id="startDate"
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="endDate">End Date</Label>
+                    <Input
+                      id="endDate"
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Initial Capital */}
+                  <div className="space-y-2">
+                    <Label htmlFor="initialCapital">Initial Capital</Label>
+                    <Input
+                      id="initialCapital"
+                      type="number"
+                      value={initialCapital}
+                      onChange={(e) => setInitialCapital(Number(e.target.value))}
+                    />
+                  </div>
                 </div>
 
-                {/* Strategy Selection */}
-                <div className="space-y-2">
-                  <Label htmlFor="strategy">Strategy</Label>
-                  <Select value={strategyId} onValueChange={handleStrategyChange}>
-                    <SelectTrigger id="strategy">
-                      <SelectValue placeholder="Select a strategy" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {isLoadingStrategies ? (
-                        <div className="flex items-center justify-center p-4">
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                        </div>
-                      ) : (
-                        strategies.map((s: Strategy) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Date Range */}
-                <div className="space-y-2">
-                  <Label htmlFor="startDate">Start Date</Label>
-                  <Input
-                    id="startDate"
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="endDate">End Date</Label>
-                  <Input
-                    id="endDate"
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                  />
-                </div>
-
-                {/* Initial Capital */}
-                <div className="space-y-2">
-                  <Label htmlFor="initialCapital">Initial Capital</Label>
-                  <Input
-                    id="initialCapital"
-                    type="number"
-                    value={initialCapital}
-                    onChange={(e) => setInitialCapital(Number(e.target.value))}
-                  />
-                </div>
-              </div>
-
-              {/* Strategy Parameters */}
-              {selectedStrategy && selectedStrategy.params.length > 0 && (
-                <>
+                {/* Strategy Parameters */}
+                {selectedStrategy && (
                   <div className="border-t pt-6 mt-6">
                     <h3 className="text-lg font-medium mb-4">Strategy Parameters</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {selectedStrategy.params.map((param) => (
-                        <div key={param.name} className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <Label htmlFor={param.name}>{param.name.replace(/_/g, ' ')}</Label>
-                            <div className="relative group">
-                              <Info className="h-4 w-4 text-muted-foreground cursor-help" />
-                              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-48 p-2 bg-popover text-popover-foreground text-xs rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-50">
-                                {param.description}
-                              </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor="riskPerTrade">Risk Per Trade (%)</Label>
+                          <div className="relative group">
+                            <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-48 p-2 bg-popover text-popover-foreground text-xs rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-50">
+                              Percentage of account to risk per trade
                             </div>
                           </div>
-                          {param.type === 'number' ? (
-                            <div className="flex items-center gap-2">
-                              <Input
-                                id={param.name}
-                                type="number"
-                                min={param.min}
-                                max={param.max}
-                                step={param.step || 1}
-                                value={strategyParams[param.name] || param.value}
-                                onChange={(e) => handleParamChange(param.name, Number(e.target.value))}
-                              />
-                            </div>
-                          ) : param.type === 'select' && param.options ? (
-                            <Select 
-                              value={strategyParams[param.name]?.toString() || param.value?.toString()}
-                              onValueChange={(v) => handleParamChange(param.name, v)}
-                            >
-                              <SelectTrigger id={param.name}>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {param.options.map((option) => (
-                                  <SelectItem key={option} value={option}>
-                                    {option}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <Input
-                              id={param.name}
-                              value={strategyParams[param.name] || param.value}
-                              onChange={(e) => handleParamChange(param.name, e.target.value)}
-                            />
-                          )}
                         </div>
-                      ))}
+                        <Input
+                          id="riskPerTrade"
+                          type="number"
+                          min={0.001}
+                          max={0.1}
+                          step={0.001}
+                          value={strategyParams.riskPerTrade}
+                          onChange={(e) => handleParamChange('riskPerTrade', Number(e.target.value))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor="stopLossPercent">Stop Loss (%)</Label>
+                          <div className="relative group">
+                            <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-48 p-2 bg-popover text-popover-foreground text-xs rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-50">
+                              Stop loss percentage from entry price
+                            </div>
+                          </div>
+                        </div>
+                        <Input
+                          id="stopLossPercent"
+                          type="number"
+                          min={0.01}
+                          max={0.2}
+                          step={0.01}
+                          value={strategyParams.stopLossPercent}
+                          onChange={(e) => handleParamChange('stopLossPercent', Number(e.target.value))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor="takeProfitPercent">Take Profit (%)</Label>
+                          <div className="relative group">
+                            <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-48 p-2 bg-popover text-popover-foreground text-xs rounded shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity z-50">
+                              Take profit percentage from entry price
+                            </div>
+                          </div>
+                        </div>
+                        <Input
+                          id="takeProfitPercent"
+                          type="number"
+                          min={0.01}
+                          max={0.5}
+                          step={0.1}
+                          value={strategyParams.takeProfitPercent}
+                          onChange={(e) => handleParamChange('takeProfitPercent', Number(e.target.value))}
+                        />
+                      </div>
                     </div>
                   </div>
-                </>
-              )}
+                )}
 
-              <div className="flex justify-end pt-4">
-                <Button
-                  onClick={() => runBacktest()}
-                  disabled={isRunningBacktest || !selectedCategory || !strategyId}
-                  className="w-full md:w-auto"
-                >
-                  {isRunningBacktest ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Running Backtest...
-                    </>
-                  ) : (
-                    'Run Backtest'
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                <div className="flex justify-end pt-4">
+                  <Button
+                    onClick={() => runBacktest()}
+                    disabled={isRunningBacktest || !selectedCategory || !strategyId}
+                    className="w-full md:w-auto"
+                  >
+                    {isRunningBacktest ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Running Backtest...
+                      </>
+                    ) : (
+                      'Run Backtest'
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </>
         ) : (
           // Backtest Results
-
-
           <div className="space-y-8 animate-fade-in">
             {/* Summary Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -348,10 +349,10 @@ export default function Backtest() {
                   {backtestResult ? (
                     <div className="flex items-end gap-2">
                       <span className="text-3xl font-semibold">
-                        {Number(backtestResult?.performance?.totalReturn || 0).toFixed(2)}%
+                        {Number(backtestResult.performance?.totalReturn || 0).toFixed(2)}%
                       </span>
                       {backtestResult.performance?.totalReturn > 0 ? 
-                        <TrendingUp className="text-trading-profit h-6 w-6" /> : 
+                        <TrendingUp className="text-trading-profit h-6 w-6" /> :
                         <TrendingDown className="text-trading-loss h-6 w-6" />
                       }
                     </div>
@@ -365,23 +366,23 @@ export default function Backtest() {
                   )}
                 </CardContent>
               </Card>
-              
+
               <Card className="shadow-sm">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">Sharpe Ratio</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-end gap-2">
-                  <span className="text-3xl font-semibold">
-                    {backtestResult?.performance?.sharpeRatio !== undefined
-                      ? backtestResult.performance.sharpeRatio.toFixed(2)
-                      : "N/A"}
-                  </span>
+                    <span className="text-3xl font-semibold">
+                      {backtestResult?.performance?.sharpeRatio !== undefined
+                        ? backtestResult.performance.sharpeRatio.toFixed(2)
+                        : "N/A"}
+                    </span>
                     <BarChart3 className="text-trading-highlight h-6 w-6" />
                   </div>
                 </CardContent>
               </Card>
-              
+
               <Card className="shadow-sm">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">Win Rate</CardTitle>
@@ -398,7 +399,7 @@ export default function Backtest() {
                   </p>
                 </CardContent>
               </Card>
-              
+
               <Card className="shadow-sm">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">Max Drawdown</CardTitle>
@@ -439,8 +440,8 @@ export default function Backtest() {
                               <span className="font-medium">
                                 {backtestResult?.startDate && backtestResult?.endDate && (
                                   <>
-                                    {format(new Date(backtestResult.startDate), 'MMM d, yyyy')} -{' '}
-                                    {format(new Date(backtestResult.endDate), 'MMM d, yyyy')}
+                                    {format(new Date(Number(backtestResult.startDate) || backtestResult.startDate), 'MMM d, yyyy')} -{' '}
+                                    {format(new Date(Number(backtestResult.endDate) || backtestResult.endDate), 'MMM d, yyyy')}
                                   </>
                                 )}
                               </span>
@@ -457,8 +458,8 @@ export default function Backtest() {
                               <span>Absolute Return</span>
                               <span className={cn(
                                 "font-medium",
-                                backtestResult.finalCapital > backtestResult.initialCapital 
-                                  ? "text-trading-profit" 
+                                backtestResult.finalCapital > backtestResult.initialCapital
+                                  ? "text-trading-profit"
                                   : "text-trading-loss"
                               )}>
                                 {formatCurrency(backtestResult.finalCapital - backtestResult.initialCapital)}
@@ -468,8 +469,8 @@ export default function Backtest() {
                               <span>Total Return</span>
                               <span className={cn(
                                 "font-medium",
-                                backtestResult.performance?.totalReturn > 0 
-                                  ? "text-trading-profit" 
+                                backtestResult.performance?.totalReturn > 0
+                                  ? "text-trading-profit"
                                   : "text-trading-loss"
                               )}>
                                 {typeof backtestResult.performance?.totalReturn === "number"
@@ -488,23 +489,29 @@ export default function Backtest() {
                                 margin={{ top: 20, right: 20, left: 20, bottom: 0 }}
                               >
                                 <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
-                                <XAxis 
-                                  dataKey="date" 
-                                  tickFormatter={(date) => format(new Date(date), 'MMM d')}
+                                <XAxis
+                                  dataKey="date"
+                                  tickFormatter={(date) => {
+                                    const d = new Date(Number(date));
+                                    return isNaN(d.getTime()) ? '' : format(d, 'MMM d');
+                                  }}
                                 />
-                                <YAxis 
+                                <YAxis
                                   tickFormatter={(value) => `$${(value / 1000).toFixed(1)}k`}
                                 />
-                                <Tooltip 
+                                <Tooltip
                                   formatter={(value) => [formatCurrency(Number(value)), "Portfolio Value"]}
-                                  labelFormatter={(label) => format(new Date(label as string), 'MMM d, yyyy')}
+                                  labelFormatter={(label) => {
+                                    const d = new Date(Number(label));
+                                    return isNaN(d.getTime()) ? '' : format(d, 'MMM d, yyyy');
+                                  }}
                                 />
-                                <Area 
-                                  type="monotone" 
-                                  dataKey="value" 
-                                  stroke="hsl(var(--primary))" 
-                                  fill="hsl(var(--primary))" 
-                                  fillOpacity={0.2} 
+                                <Area
+                                  type="monotone"
+                                  dataKey="value"
+                                  stroke="hsl(var(--primary))"
+                                  fill="hsl(var(--primary))"
+                                  fillOpacity={0.2}
                                 />
                               </AreaChart>
                             </ResponsiveContainer>
@@ -521,23 +528,29 @@ export default function Backtest() {
                             margin={{ top: 20, right: 20, left: 20, bottom: 20 }}
                           >
                             <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
-                            <XAxis 
-                              dataKey="date" 
-                              tickFormatter={(date) => format(new Date(date), 'MMM d')}
+                            <XAxis
+                              dataKey="date"
+                              tickFormatter={(date) => {
+                                const d = new Date(Number(date));
+                                return isNaN(d.getTime()) ? '' : format(d, 'MMM d');
+                              }}
                             />
-                            <YAxis 
+                            <YAxis
                               tickFormatter={(value) => `$${(value / 1000).toFixed(1)}k`}
                             />
-                            <Tooltip 
+                            <Tooltip
                               formatter={(value) => [formatCurrency(Number(value)), "Portfolio Value"]}
-                              labelFormatter={(label) => format(new Date(label as string), 'MMM d, yyyy')}
+                              labelFormatter={(label) => {
+                                const d = new Date(Number(label));
+                                return isNaN(d.getTime()) ? '' : format(d, 'MMM d, yyyy');
+                              }}
                             />
-                            <Area 
-                              type="monotone" 
-                              dataKey="value" 
-                              stroke="hsl(var(--primary))" 
-                              fill="hsl(var(--primary))" 
-                              fillOpacity={0.2} 
+                            <Area
+                              type="monotone"
+                              dataKey="value"
+                              stroke="hsl(var(--primary))"
+                              fill="hsl(var(--primary))"
+                              fillOpacity={0.2}
                             />
                           </AreaChart>
                         </ResponsiveContainer>
@@ -552,23 +565,29 @@ export default function Backtest() {
                             margin={{ top: 20, right: 20, left: 20, bottom: 20 }}
                           >
                             <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
-                            <XAxis 
-                              dataKey="date" 
-                              tickFormatter={(date) => format(new Date(date), 'MMM d')}
+                            <XAxis
+                              dataKey="date"
+                              tickFormatter={(date) => {
+                                const d = new Date(Number(date));
+                                return isNaN(d.getTime()) ? '' : format(d, 'MMM d');
+                              }}
                             />
-                            <YAxis 
-                              tickFormatter={(value) => `${value.toFixed(1)}%`}
+                            <YAxis
+                              tickFormatter={(value) => (value != null && !isNaN(value) ? `${value.toFixed(1)}%` : '')}
                             />
-                            <Tooltip 
+                            <Tooltip
                               formatter={(value) => [`${Number(value).toFixed(2)}%`, "Daily Return"]}
-                              labelFormatter={(label) => format(new Date(label as string), 'MMM d, yyyy')}
+                              labelFormatter={(label) => {
+                                const d = new Date(Number(label));
+                                return isNaN(d.getTime()) ? '' : format(d, 'MMM d, yyyy');
+                              }}
                             />
                             <Legend />
-                            <Line 
-                              type="monotone" 
-                              dataKey="value" 
-                              name="Daily Return" 
-                              stroke="#0EA5E9" 
+                            <Line
+                              type="monotone"
+                              dataKey="value"
+                              name="Daily Return"
+                              stroke="#0EA5E9"
                               dot={false}
                             />
                           </LineChart>
@@ -585,21 +604,27 @@ export default function Backtest() {
                               margin={{ top: 20, right: 20, left: 20, bottom: 20 }}
                             >
                               <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
-                              <XAxis 
-                                dataKey="date" 
-                                tickFormatter={(date) => format(new Date(date), 'MMM d')}
+                              <XAxis
+                                dataKey="date"
+                                tickFormatter={(date) => {
+                                  const d = new Date(Number(date));
+                                  return isNaN(d.getTime()) ? '' : format(d, 'MMM d');
+                                }}
                               />
-                              <YAxis 
-                                tickFormatter={(value) => `$${value}`}
+                              <YAxis
+                                tickFormatter={(value) => (value != null ? `$${value}` : '')}
                               />
-                              <Tooltip 
+                              <Tooltip
                                 formatter={(value) => [formatCurrency(Number(value)), "Profit/Loss"]}
-                                labelFormatter={(label) => format(new Date(label as string), 'MMM d, yyyy')}
+                                labelFormatter={(label) => {
+                                  const d = new Date(Number(label));
+                                  return isNaN(d.getTime()) ? '' : format(d, 'MMM d, yyyy');
+                                }}
                               />
-                              <Bar 
-                                dataKey="profit" 
-                                name="Profit/Loss" 
-                                fill={(data) => (data && data > 0) ? "#34D399" : "#EF4444"}
+                              <Bar
+                                dataKey="profit"
+                                name="Profit/Loss"
+                                fill={(data: any) => (data && data > 0) ? "#34D399" : "#EF4444"}
                               />
                             </BarChart>
                           </ResponsiveContainer>
@@ -619,7 +644,9 @@ export default function Backtest() {
                             <tbody>
                               {(backtestResult?.trades ?? []).map((trade, index) => (
                                 <tr key={index} className="border-b">
-                                  <td className="py-2 px-4">{format(new Date(trade.date), 'MMM d, yyyy')}</td>
+                                  <td className="py-2 px-4">
+                                    {trade.date ? format(new Date(Number(trade.date)), 'MMM d, yyyy') : '-'}
+                                  </td>
                                   <td className="py-2 px-4">
                                     <span className={trade.type === 'buy' ? 'text-trading-highlight' : 'text-trading-profit'}>
                                       {trade.type.toUpperCase()}
@@ -642,7 +669,7 @@ export default function Backtest() {
                       </div>
                     </TabsContent>
                   </CardContent>
-                  </Tabs>
+                </Tabs>
               </CardHeader>
             </Card>
           </div>
