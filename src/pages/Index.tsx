@@ -66,9 +66,9 @@ export default function Index() {
                 </Button>
               </Link>
               <Link to="/strategy">
-                <Button size="lg" variant="outline" className="gap-2">
+                {/* <Button size="lg" variant="outline" className="gap-2">
                   Build a Strategy <Zap className="w-4 h-4" />
-                </Button>
+                </Button> */}
               </Link>
             </div>
           </div>
