@@ -29,7 +29,7 @@ const NavItems = [
     icon: <Play className="w-5 h-5" />
   },
   {
-    name: "Strategy Builder",
+    name: "Strategies",
     path: "/strategy",
     icon: <LineChart className="w-5 h-5" />
   },
