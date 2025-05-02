@@ -1,4 +1,3 @@
-
 import { useState, useRef } from "react";
 import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -9,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { API, Strategy } from "@/services/api";
 import { useQuery } from "@tanstack/react-query";
-import { Code, Trash2, Plus, Save, ArrowRight, Bookmark, Settings } from "lucide-react";
+import { Code, Trash2, Plus, Save, ArrowRight, Bookmark, Settings, BarChart3, TrendingUp, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -27,19 +26,45 @@ interface StrategyParam {
   description: string;
 }
 
+interface StrategyPerformance {
+  totalReturn: number;
+  sharpeRatio: number;
+  maxDrawdown: number;
+  winRate: number;
+  tradesCount: number;
+}
+
 export default function StrategyBuilder() {
-  const [tabValue, setTabValue] = useState("templates");
+  const [tabValue, setTabValue] = useState("strategies");
   const [strategyName, setStrategyName] = useState("");
   const [strategyDescription, setStrategyDescription] = useState("");
   const [strategyParams, setStrategyParams] = useState<StrategyParam[]>([]);
   const [strategyCode, setStrategyCode] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState("");
 
-  // Fetch available strategies as templates
-  const { data: templates = [], isLoading: isLoadingTemplates } = useQuery({
+  // Fetch available strategies
+  const { data: strategies = [], isLoading: isLoadingStrategies } = useQuery({
     queryKey: ['strategies'],
     queryFn: API.getAvailableStrategies,
   });
+
+  // Mock performance data for each strategy
+  const strategyPerformance: Record<string, StrategyPerformance> = {
+    'BasicTestStrategy': {
+      totalReturn: 15.2,
+      sharpeRatio: 1.8,
+      maxDrawdown: -8.5,
+      winRate: 65.3,
+      tradesCount: 42
+    },
+    'rsi-strategy': {
+      totalReturn: 12.7,
+      sharpeRatio: 1.5,
+      maxDrawdown: -10.2,
+      winRate: 58.9,
+      tradesCount: 38
+    }
+  };
 
   // Reference to the new parameter form
   const nameRef = useRef<HTMLInputElement>(null);
@@ -48,7 +73,7 @@ export default function StrategyBuilder() {
 
   // Load template
   const handleLoadTemplate = () => {
-    const template = templates.find((t: Strategy) => t.id === selectedTemplate);
+    const template = strategies.find((t: Strategy) => t.id === selectedTemplate);
     if (template) {
       setStrategyName(template.name);
       setStrategyDescription(template.description);
@@ -164,147 +189,125 @@ ${paramUsage}
       <div className="container mx-auto px-4 space-y-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-medium">Strategy Builder</h1>
-            <p className="text-muted-foreground mt-1">Create and customize your trading strategies</p>
+            <h1 className="text-3xl font-medium">Trading Strategies</h1>
+            <p className="text-muted-foreground mt-1">Browse and manage your trading strategies</p>
           </div>
           <div className="flex gap-3">
             <Button 
               variant="outline" 
               className="gap-2"
-              onClick={handleSaveStrategy}
-              disabled={!strategyName || strategyParams.length === 0}
+              onClick={() => setTabValue("customize")}
             >
-              <Save className="h-4 w-4" />
-              Save Strategy
+              <Plus className="h-4 w-4" />
+              New Strategy
             </Button>
-            <Link to="/backtest">
-              <Button className="gap-2">
-                <ArrowRight className="h-4 w-4" />
-                Test Strategy
-              </Button>
-            </Link>
           </div>
         </div>
 
         <Tabs value={tabValue} onValueChange={setTabValue} className="space-y-4">
           <TabsList className="grid grid-cols-3 max-w-md">
-            <TabsTrigger value="templates">Templates</TabsTrigger>
+            <TabsTrigger value="strategies">Strategies</TabsTrigger>
             <TabsTrigger value="customize">Customize</TabsTrigger>
             <TabsTrigger value="code">Code</TabsTrigger>
           </TabsList>
 
-          {/* Templates Tab */}
-          <TabsContent value="templates" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Strategy Templates</CardTitle>
-                <CardDescription>
-                  Choose a pre-built strategy template as a starting point
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="template">Select Template</Label>
-                    <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
-                      <SelectTrigger id="template">
-                        <SelectValue placeholder="Choose a template" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {templates.map((template: Strategy) => (
-                          <SelectItem key={template.id} value={template.id}>
-                            {template.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {selectedTemplate && (
-                    <div className="p-4 border rounded-md bg-muted/40">
-                      <h3 className="font-medium mb-2">
-                        {templates.find((t: Strategy) => t.id === selectedTemplate)?.name}
-                      </h3>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        {templates.find((t: Strategy) => t.id === selectedTemplate)?.description}
-                      </p>
-                      <div className="space-y-2">
-                        <h4 className="text-sm font-medium">Parameters:</h4>
-                        <ul className="text-sm space-y-1 list-disc pl-5">
-                          {templates
-                            .find((t: Strategy) => t.id === selectedTemplate)
-                            ?.params.map((param) => (
-                              <li key={param.name}>
-                                <span className="font-medium">{param.name}</span>: {param.description}
-                              </li>
-                            ))}
-                        </ul>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-end border-t pt-6">
-                <Button
-                  onClick={handleLoadTemplate}
-                  disabled={!selectedTemplate}
-                  className="gap-2"
-                >
-                  <Bookmark className="h-4 w-4" />
-                  Use Template
-                </Button>
-              </CardFooter>
-            </Card>
-
+          {/* Strategies Tab */}
+          <TabsContent value="strategies" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <Card className="shadow-sm hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <CardTitle>From Scratch</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground mb-4">
-                    Build a completely custom strategy from the ground up
-                  </p>
-                </CardContent>
-                <CardFooter className="border-t pt-4">
-                  <Button 
-                    variant="outline" 
-                    className="w-full"
-                    onClick={() => {
-                      setStrategyName("");
-                      setStrategyDescription("");
-                      setStrategyParams([]);
-                      setStrategyCode("");
-                      setTabValue("customize");
-                    }}
-                  >
-                    Create New
-                  </Button>
-                </CardFooter>
-              </Card>
+              {isLoadingStrategies ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <Card key={i} className="animate-pulse">
+                    <CardHeader>
+                      <div className="h-6 w-3/4 bg-muted rounded" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        <div className="h-4 w-full bg-muted rounded" />
+                        <div className="h-4 w-2/3 bg-muted rounded" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              ) : (
+                strategies.map((strategy: Strategy) => {
+                  const performance = strategyPerformance[strategy.id] || {
+                    totalReturn: 0,
+                    sharpeRatio: 0,
+                    maxDrawdown: 0,
+                    winRate: 0,
+                    tradesCount: 0
+                  };
 
-              <Card className="shadow-sm hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <CardTitle>Import</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground mb-4">
-                    Import a strategy from a file or code snippet
-                  </p>
-                </CardContent>
-                <CardFooter className="border-t pt-4">
-                  <Button 
-                    variant="outline" 
-                    className="w-full"
-                    onClick={() => {
-                      setTabValue("code");
-                      toast.info("Paste your code in the editor");
-                    }}
-                  >
-                    Import Code
-                  </Button>
-                </CardFooter>
-              </Card>
+                  return (
+                    <Card key={strategy.id} className="hover:shadow-md transition-shadow">
+                      <CardHeader>
+                        <CardTitle className="flex items-center justify-between">
+                          <span>{strategy.name}</span>
+                          <div className="flex items-center gap-2">
+                            <span className={cn(
+                              "text-sm font-medium",
+                              performance.totalReturn > 0 ? "text-trading-profit" : "text-trading-loss"
+                            )}>
+                              {performance.totalReturn > 0 ? "+" : ""}{performance.totalReturn.toFixed(2)}%
+                            </span>
+                          </div>
+                        </CardTitle>
+                        <CardDescription>{strategy.description}</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <BarChart3 className="h-4 w-4" />
+                              <span>Sharpe Ratio</span>
+                            </div>
+                            <div className="font-medium">{performance.sharpeRatio.toFixed(2)}</div>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <TrendingDown className="h-4 w-4" />
+                              <span>Max Drawdown</span>
+                            </div>
+                            <div className="font-medium text-trading-loss">{performance.maxDrawdown.toFixed(2)}%</div>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <TrendingUp className="h-4 w-4" />
+                              <span>Win Rate</span>
+                            </div>
+                            <div className="font-medium">{performance.winRate.toFixed(1)}%</div>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Bookmark className="h-4 w-4" />
+                              <span>Total Trades</span>
+                            </div>
+                            <div className="font-medium">{performance.tradesCount}</div>
+                          </div>
+                        </div>
+                      </CardContent>
+                      <CardFooter className="flex justify-between border-t pt-4">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => {
+                            setSelectedTemplate(strategy.id);
+                            handleLoadTemplate();
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <Link to="/backtest">
+                          <Button size="sm" className="gap-2">
+                            <ArrowRight className="h-4 w-4" />
+                            Backtest
+                          </Button>
+                        </Link>
+                      </CardFooter>
+                    </Card>
+                  );
+                })
+              )}
             </div>
           </TabsContent>
 
@@ -518,9 +521,9 @@ ${paramUsage}
               <CardFooter className="flex justify-between border-t pt-6">
                 <Button 
                   variant="outline" 
-                  onClick={() => setTabValue("templates")}
+                  onClick={() => setTabValue("strategies")}
                 >
-                  Back to Templates
+                  Back to Strategies
                 </Button>
                 <Button 
                   onClick={handleShowCode} 
