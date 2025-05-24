@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +9,7 @@ import { API, Strategy, Symbol } from "@/services/api";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Loader2, Play, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 
@@ -96,12 +95,10 @@ export default function Live() {
     mutationFn: async () => {
       return API.validateApiKeys(apiKey, secretKey); // Call API to validate keys
     },
-    onSuccess: (isValid) => {
-      if (isValid) {
-        toast.success("API keys are valid");
-      } else {
-        toast.error("Invalid API keys. Please check and try again.");
-      }
+    onSuccess: (url) => {
+      console.log(url)
+      window.open(url);
+
     },
     onError: () => {
       toast.error("Error validating API keys. Try again later.");
@@ -138,6 +135,45 @@ export default function Live() {
       }
     },
   });
+
+  // Add this function inside your Live component
+  function handleZerodhaCallback() {
+    const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
+
+    useEffect(() => {
+      // Get request_token from URL params
+      const requestToken = searchParams.get("request_token");
+      const status = searchParams.get("status");
+
+      // Check if this is a Zerodha callback
+      if (requestToken && status === "success") {
+
+
+        // Call your API to send the token to backend
+        fetch("YOUR_BACKEND_URL/api/zerodha/callback", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ request_token: requestToken }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            toast.success("Successfully authenticated with Zerodha");
+            // Clean up URL by removing query parameters
+            navigate("/live", { replace: true });
+          })
+          .catch((error) => {
+            toast.error("Failed to authenticate with Zerodha");
+            console.error("Zerodha authentication error:", error);
+          });
+      }
+    }, [searchParams, navigate]);
+  }
+
+  // Add this near the top of your component
+  handleZerodhaCallback();
 
   return (
     <Layout className="relative">
@@ -254,7 +290,7 @@ export default function Live() {
                       {!keysSaved ? (
                         <div className="flex items-center gap-2 text-amber-500">
                           <AlertTriangle className="h-4 w-4" />
-                          <span>Please add your Alpaca API keys first</span>
+                          <span>Please add your Zerodha API keys first</span>
                         </div>
                       ) : (
                         <Link to="/backtest">
@@ -407,7 +443,7 @@ export default function Live() {
           {/* API Configuration */}
           <Card className="shadow-sm">
             <CardHeader>
-              <CardTitle>Alpaca API Configuration</CardTitle>
+              <CardTitle>Zerodha API Configuration</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
@@ -418,7 +454,7 @@ export default function Live() {
                     type="password"
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="Your Alpaca API key"
+                    placeholder="Your Zerodha API key"
                   />
                 </div>
                 <div className="space-y-2">
@@ -428,7 +464,7 @@ export default function Live() {
                     type="password"
                     value={secretKey}
                     onChange={(e) => setSecretKey(e.target.value)}
-                    placeholder="Your Alpaca secret key"
+                    placeholder="Your Zerodha secret key"
                   />
                 </div>
               </div>
@@ -468,7 +504,7 @@ export default function Live() {
               <div className="space-y-4">
                 <h3 className="text-sm font-medium">How to get API Keys:</h3>
                 <ol className="text-sm text-muted-foreground space-y-2 list-decimal pl-4">
-                  <li>Create an account on <a href="https://alpaca.markets" target="_blank" rel="noopener noreferrer" className="text-primary underline">Alpaca</a></li>
+                  <li>Create an account on <a href="https://alpaca.markets" target="_blank" rel="noopener noreferrer" className="text-primary underline">Zerodha</a></li>
                   <li>Navigate to Paper Trading in your dashboard</li>
                   <li>Generate API keys for paper trading</li>
                   <li>Copy and paste the keys here</li>
