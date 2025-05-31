@@ -415,7 +415,6 @@
     "nodedir": "C:\\Users\\K TEJASWI\\AppData\\Local\\node-gyp\\Cache\\20.11.1",
     "python": "C:\\Users\\K TEJASWI\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
     "standalone_static_library": 1,
-    "msbuild_path": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\MSBuild\\Current\\Bin\\MSBuild.exe",
-    "msvs_version": "2022"
+    "msbuild_path": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\MSBuild\\Current\\Bin\\MSBuild.exe"
   }
 }

@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,9 +10,10 @@ import { API, Strategy, Symbol } from "@/services/api";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Loader2, Play, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
+import axios from "axios";
 
 export default function Live() {
   const [symbol, setSymbol] = useState("");
@@ -25,7 +26,7 @@ export default function Live() {
   // Fetch available symbols
   const { data: symbols = [], isLoading: isLoadingSymbols } = useQuery({
     queryKey: ['symbols'],
-    queryFn: API.getAvailableSymbols,
+    queryFn: API.getAvailableCategories,
   });
 
   // Fetch available strategies
@@ -96,12 +97,10 @@ export default function Live() {
     mutationFn: async () => {
       return API.validateApiKeys(apiKey, secretKey); // Call API to validate keys
     },
-    onSuccess: (isValid) => {
-      if (isValid) {
-        toast.success("API keys are valid");
-      } else {
-        toast.error("Invalid API keys. Please check and try again.");
-      }
+    onSuccess: (url) => {
+      console.log(url)
+      window.open(url);
+
     },
     onError: () => {
       toast.error("Error validating API keys. Try again later.");
@@ -138,6 +137,59 @@ export default function Live() {
       }
     },
   });
+
+  // Add this function inside your Live component
+  function handleZerodhaCallback() {
+    const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
+
+    useEffect(() => {
+      // Get request_token from URL params
+      const requestToken = searchParams.get("request_token");
+      const status = searchParams.get("status");
+      console.log(requestToken, "Request Token");
+
+      // Retrieve apiKey and secretKey from local storage
+      const apiKey = localStorage.getItem("apiKey");
+      const secretKey = localStorage.getItem("secretKey");
+
+      // Check if this is a Zerodha callback
+      if (requestToken && status === "success" && apiKey && secretKey) {
+        console.log("Zerodha callback detected");
+
+        // Call your API to send the token, apiKey, and secretKey to the backend
+        axios
+          .post("http://localhost:3000/zerodha/callback", {
+            request_token: requestToken,
+            apiKey,
+            secretKey,
+          })
+          .then((response) => {
+            const { accessToken } = response.data;
+
+            // Save accessToken in local storage
+            if (accessToken) {
+              localStorage.setItem("requestToken", accessToken);
+              toast.success("Successfully authenticated with Zerodha");
+            } else {
+              toast.error("Access token not received from backend");
+            }
+
+            // Clean up URL by removing query parameters
+            navigate("/live", { replace: true });
+          })
+          .catch((error) => {
+            toast.error("Failed to authenticate with Zerodha");
+            console.error("Zerodha authentication error:", error);
+          });
+      } else {
+        console.error("Missing requestToken, apiKey, or secretKey");
+      }
+    }, [searchParams, navigate]);
+  }
+
+  // Add this near the top of your component
+  handleZerodhaCallback();
 
   return (
     <Layout className="relative">

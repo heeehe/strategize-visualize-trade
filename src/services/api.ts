@@ -77,21 +77,25 @@ export const API = {
     }
   },
 
-  validateApiKeys: async (apiKey: string, secretKey: string): Promise<boolean> => {
+  validateApiKeys: async (apiKey: string, secretKey: string): Promise<string> => {
     try {
       console.log(apiKey,secretKey)
-      const response = await axios.post(`${API_BASE_URL}/api/validate-keys`, { apiKey, secretKey });
-      if(response.data.isValid){
+      const res = await axios.post(`${API_BASE_URL}/zerodha/login`, { apiKey, secretKey });
+      if(res.data.success){
         localStorage.setItem('apiKey', apiKey);
       localStorage.setItem('secretKey', secretKey);
+      const loginUrlWithKey = res.data.loginUrl;
+      console.log("Login URL with key:", loginUrlWithKey);
+
+      return loginUrlWithKey
       }
 
-      return response.data.isValid; // Assuming the server returns { isValid: true/false }
+      return 'false'; // Assuming the server returns { isValid: true/false }
     } catch (error) {
       console.error("API key validation failed:", error);
-      return false;
-    }
-  },
+      return 'false';
+    }
+  },
   
   // Symbols
   // getAvailableSymbols: async (): Promise<Symbol[]> => {
@@ -153,12 +157,13 @@ export const API = {
       "Bonds 📊": [
         "bundtreur", "ukgilttrgbp", "ustbondtrusd"
       ],
-      "Crypto assets ₿": [
-        "adausd", "aveusd", "batusd", "bchchf", "bcheur", "bchgbp", "bchusd",
-        "btcchf", "btceur", "btcgbp", "btcusd", "cmpusd", "dshusd", "enjusd",
-        "eosusd", "ethchf", "etheur", "ethgbp", "ethusd", "lnkusd", "ltcchf",
-        "ltceur", "ltcgbp", "ltcusd", "matusd", "mkrusd", "trxusd", "uniusd",
-        "xlmchf", "xlmeur", "xlmgbp", "xlmusd", "yfiusd"
+      "Equity Indices 🌏": [
+        "chiidxusd",  // China A50 Index
+        "hkgidxhkd",  // Hong Kong 40 Index
+        "jpnidxjpy",  // Japan 225
+        "ausidxaud",  // Australia 200 Index
+        "indidxusd",  // India 50 Index
+        "sgdidxsgd"   // Singapore Blue Chip Cash Index
       ],
       "Agricultural commodities ☕": [
         "cocoacmdusd", "coffeecmdusx", "cottoncmdusx", "ojuicecmdusx",

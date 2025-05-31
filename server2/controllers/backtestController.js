@@ -13,13 +13,14 @@ const categoryToSymbols = {
   "Bonds 📊": [
     "bundtreur", "ukgilttrgbp", "ustbondtrusd"
   ],
-  "Crypto assets ₿": [
-    "adausd", "aveusd", "batusd", "bchchf", "bcheur", "bchgbp", "bchusd",
-    "btcchf", "btceur", "btcgbp", "btcusd", "cmpusd", "dshusd", "enjusd",
-    "eosusd", "ethchf", "etheur", "ethgbp", "ethusd", "lnkusd", "ltcchf",
-    "ltceur", "ltcgbp", "ltcusd", "matusd", "mkrusd", "trxusd", "uniusd",
-    "xlmchf", "xlmeur", "xlmgbp", "xlmusd", "yfiusd"
-  ],
+  "Equity Indices 🌏": [
+  "chiidxusd",  // China A50 Index
+  "hkgidxhkd",  // Hong Kong 40 Index
+  "jpnidxjpy",  // Japan 225
+  "ausidxaud",  // Australia 200 Index
+  "indidxusd",  // India 50 Index
+  "sgdidxsgd"   // Singapore Blue Chip Cash Index
+],
   "Agricultural commodities ☕": [
     "cocoacmdusd", "coffeecmdusx", "cottoncmdusx", "ojuicecmdusx",
     "soybeancmdusx", "sugarcmdusd"
