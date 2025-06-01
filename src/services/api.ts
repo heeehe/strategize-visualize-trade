@@ -70,7 +70,9 @@ export const API = {
   
   saveApiKeys: async (apiKey: string, secretKey: string): Promise<boolean> => {
     try {
-
+      localStorage.setItem('apiKey', apiKey);
+      localStorage.setItem('secretKey', secretKey);
+      return true;
     } catch (error) {
       console.error("Failed to save API keys:", error);
       return false;
