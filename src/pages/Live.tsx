@@ -12,20 +12,92 @@ import { toast } from "sonner";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
+import axios from "axios";
+import ReactSelect, { components, GroupBase, MultiValue, GroupHeadingProps } from 'react-select';
+
+type OptionType = { label: string; value: number };
+
+const GroupHeading = (props: GroupHeadingProps<OptionType, true, GroupBase<OptionType>>) => {
+  const { data, selectProps } = props;
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    // Select all options in this group
+    const groupOptions = data.options;
+    // Get current selected options
+    let current: OptionType[] = [];
+    if (Array.isArray(selectProps.value)) {
+      current = selectProps.value as OptionType[];
+    }
+    // Add all group options that are not already selected
+    const newOptions = [
+      ...current,
+      ...groupOptions.filter(
+        (opt: OptionType) => !current.some((sel: OptionType) => sel.value === opt.value)
+      ),
+    ];
+    selectProps.onChange(newOptions, { action: 'select-option', option: null });
+  };
+
+  return (
+    <div style={{ cursor: 'pointer', fontWeight: 'bold' }} onClick={handleClick}>
+      {props.children} <span style={{ color: '#888', fontSize: 12 }}>(Select all)</span>
+    </div>
+  );
+};
+
+function useZerodhaCallback(setAccountDetails: (details: Record<string, unknown> | null) => void) {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Get request_token from URL params
+    const requestToken = searchParams.get("request_token");
+    const status = searchParams.get("status");
+
+    // Retrieve apiKey and secretKey from local storage
+    const apiKey = localStorage.getItem("apiKey");
+    const secretKey = localStorage.getItem("secretKey");
+
+    // Check if this is a Zerodha callback
+    if (requestToken && status === "success" && apiKey && secretKey) {
+      axios
+        .post("http://localhost:3000/zerodha/callback", {
+          request_token: requestToken,
+          apiKey,
+          secretKey,
+        })
+        .then((response) => {
+          const { accessToken, accountDetails } = response.data;
+
+          // Save accessToken in local storage
+          if (accessToken) {
+            localStorage.setItem("accessToken", accessToken);
+            setAccountDetails(accountDetails); // Save account details in state
+            toast.success("Successfully authenticated with Zerodha");
+          } else {
+            toast.error("Access token not received from backend");
+          }
+
+          // Clean up URL by removing query parameters
+          navigate("/live", { replace: true });
+        })
+        .catch((error) => {
+          toast.error("Failed to authenticate with Zerodha");
+          console.error("Zerodha authentication error:", error);
+        });
+    }
+  }, [searchParams, navigate, setAccountDetails]);
+}
 
 export default function Live() {
-  const [symbol, setSymbol] = useState("");
+  const [symbol, setSymbol] = useState<MultiValue<{ label: string; value: number }>>([]);
   const [strategyId, setStrategyId] = useState("");
-  const [strategyParams, setStrategyParams] = useState<Record<string, any>>({});
+  const [strategyParams, setStrategyParams] = useState<Record<string, string | number | undefined>>({});
   const [apiKey, setApiKey] = useState("");
   const [secretKey, setSecretKey] = useState("");
   const [keysSaved, setKeysSaved] = useState(false);
-
-  // Fetch available symbols
-  const { data: symbols = [], isLoading: isLoadingSymbols } = useQuery({
-    queryKey: ['symbols'],
-    queryFn: API.getAvailableSymbols,
-  });
+  const [accountDetails, setAccountDetails] = useState<null | Record<string, unknown>>(null);
+  const [maxCapital, setMaxCapital] = useState("");
 
   // Fetch available strategies
   const { data: strategies = [], isLoading: isLoadingStrategies } = useQuery({
@@ -37,20 +109,21 @@ export default function Live() {
   const { data: apiKeys, isLoading: isLoadingApiKeys } = useQuery({
     queryKey: ['apiKeys'],
     queryFn: API.getApiKeys,
-    onSuccess: (data) => {
-      if (data.apiKey && data.secretKey) {
-        setApiKey(data.apiKey);
-        setSecretKey(data.secretKey);
-        setKeysSaved(true);
-      }
-    }
   });
+
+  useEffect(() => {
+    if (apiKeys && apiKeys.apiKey && apiKeys.secretKey) {
+      setApiKey(apiKeys.apiKey);
+      setSecretKey(apiKeys.secretKey);
+      setKeysSaved(true);
+    }
+  }, [apiKeys]);
 
   // Fetch trading status
   const { data: tradingStatus, isLoading: isLoadingStatus, refetch: refetchStatus } = useQuery({
     queryKey: ['tradingStatus'],
     queryFn: API.getTradingStatus,
-    refetchInterval: keysSaved ? 5000 : false,
+    refetchInterval: keysSaved ? 1000 : false,
   });
 
   // Find the selected strategy
@@ -59,11 +132,10 @@ export default function Live() {
   // Handle strategy change
   const handleStrategyChange = (id: string) => {
     setStrategyId(id);
-    
     // Initialize parameters with default values
     const strategy = strategies.find(s => s.id === id);
     if (strategy) {
-      const initialParams: Record<string, any> = {};
+      const initialParams: Record<string, string | number | undefined> = {};
       strategy.params.forEach(param => {
         initialParams[param.name] = param.value;
       });
@@ -72,7 +144,7 @@ export default function Live() {
   };
 
   // Handle parameter change
-  const handleParamChange = (name: string, value: any) => {
+  const handleParamChange = (name: string, value: string | number) => {
     setStrategyParams(prev => ({
       ...prev,
       [name]: value
@@ -91,30 +163,19 @@ export default function Live() {
       }
     },
   });
-  const { mutate: validateApiKeys, isPending: isValidatingKeys } = useMutation({
-    mutationFn: async () => {
-      return API.validateApiKeys(apiKey, secretKey); // Call API to validate keys
-    },
-    onSuccess: (url) => {
-      console.log(url)
-      window.open(url);
-
-    },
-    onError: () => {
-      toast.error("Error validating API keys. Try again later.");
-    },
-  });
 
   // Start trading mutation
   const { mutate: startTrading, isPending: isStarting } = useMutation({
     mutationFn: () => {
-      if (!symbol || !strategyId || !keysSaved) {
+      if (!symbol.length || !strategyId || !keysSaved) {
         toast.error("Please fill in all required fields and save your API keys");
         return Promise.reject();
       }
-      
+      // Convert symbol (MultiValue) to array of values
+      const symbolValues = symbol.map(s => s.value);
+      // If API.startLiveTrading expects only 3 arguments, remove maxCapital
       return API.startLiveTrading(
-        symbol,
+        symbolValues,
         strategyId,
         strategyParams
       );
@@ -136,44 +197,107 @@ export default function Live() {
     },
   });
 
-  // Add this function inside your Live component
-  function handleZerodhaCallback() {
-    const [searchParams] = useSearchParams();
-    const navigate = useNavigate();
+  // Zerodha callback handler
+  useZerodhaCallback(setAccountDetails);
 
-    useEffect(() => {
-      // Get request_token from URL params
-      const requestToken = searchParams.get("request_token");
-      const status = searchParams.get("status");
-
-      // Check if this is a Zerodha callback
-      if (requestToken && status === "success") {
-
-
-        // Call your API to send the token to backend
-        fetch("YOUR_BACKEND_URL/api/zerodha/callback", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ request_token: requestToken }),
-        })
-          .then((response) => response.json())
-          .then((data) => {
-            toast.success("Successfully authenticated with Zerodha");
-            // Clean up URL by removing query parameters
-            navigate("/live", { replace: true });
-          })
-          .catch((error) => {
-            toast.error("Failed to authenticate with Zerodha");
-            console.error("Zerodha authentication error:", error);
-          });
-      }
-    }, [searchParams, navigate]);
+  const raw = {
+    "Banking & Financial Services": {
+      "IDBI": 377857,
+      "SOUTHBANK": 1522689,
+      "IOB": 2393089,
+      "PNB": 2730497,
+      "CANBK": 2763265,
+      "IDFCFIRSTB": 2863105,
+      "UCOBANK": 2873089,
+      "MAHABANK": 2912513,
+      "YESBANK": 3050241,
+      "CENTRALBK": 3812865,
+      "PSB": 5376257
+    },
+    "Energy & Power": {
+      "NLCINDIA": 2197761,
+      "JPPOWER": 3011329,
+      "SUZLON": 3076609,
+      "RENUKA": 3078657,
+      "RPOWER": 3906305,
+      "NHPC": 4454401,
+      "SJVN": 4834049
+    },
+    "Infrastructure & Engineering": {
+      "NCC": 593665,
+      "PNCINFRA": 2402561,
+      "TARMAT": 3781377,
+      "KNRCON": 3912449,
+      "IRB": 3920129,
+      "ASHOKA": 5166593,
+      "SALASAR": 5468673,
+      "NBCC": 8042241
+    },
+    "Chemicals & Specialty Materials": {
+      "GHCL": 288513,
+      "NOCIL": 625153,
+      "PIDILITIND": 681985,
+      "SRF": 837889,
+      "IGL": 2883073,
+      "KIRIINDUS": 4259585,
+      "VIKASECO": 6593537
+    },
+    "Iron & Steel": {
+      "HITECH": 734209,
+      "SAIL": 758529,
+      "TATASTEEL": 895745,
+      "JINDALSTEL": 1723649,
+      "RAMASTEEL": 2636801,
+      "MUKANDLTD": 2899201,
+      "JSWSTEEL": 3001089,
+      "MSPL": 3051265
+    },
+    "FMCG & Consumer Goods": {
+      "ADOR": 8705,
+      "BCLIND": 643329,
+      "HATSUN": 996353,
+      "HERITGFOOD": 1177089,
+      "VADILALIND": 6194177
+    },
+    "Textiles & Manufacturing": {
+      "ARVIND": 49409,
+      "RAYMOND": 731905,
+      "SRF": 837889,
+      "VARDMNPOLY": 933377,
+      "TRIDENT": 2479361,
+      "PAGEIND": 3689729,
+      "KPRMILL": 3817473
+    },
+    "Logistics & Transport": {
+      "MAHLOG": 98561,
+      "BLUEDART": 126721,
+      "CONCOR": 1215745,
+      "VRLLOG": 2226177,
+      "NAVKARCORP": 2702593,
+      "TCI": 2708481,
+      "ALLCARGO": 3456257
+    },
+    "Real Estate": {
+      "MAHLIFE": 2060801,
+      "SOBHA": 3539457,
+      "PHOENIXLTD": 3725313,
+      "DLF": 3771393,
+      "BRIGADE": 3887105,
+      "SUNTECK": 4516097,
+      "GODREJPROP": 4576001,
+      "OBEROIRLTY": 5181953,
+      "PRESTIGE": 5197313
+    }
   }
+  
 
-  // Add this near the top of your component
-  handleZerodhaCallback();
+  const groupedOptions = Object.entries(raw).map(([category, stocks]) => ({
+    label: category,
+    options: Object.entries(stocks).map(([name, value]) => ({
+      label: name,
+      value
+    }))
+  }));
 
   return (
     <Layout className="relative">
@@ -188,7 +312,7 @@ export default function Live() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
             {/* Trading Status Card */}
-            <Card className="shadow-sm">
+            {/* <Card className="shadow-sm">
               <CardHeader>
                 <CardTitle>Trading Status</CardTitle>
               </CardHeader>
@@ -290,7 +414,7 @@ export default function Live() {
                       {!keysSaved ? (
                         <div className="flex items-center gap-2 text-amber-500">
                           <AlertTriangle className="h-4 w-4" />
-                          <span>Please add your Zerodha API keys first</span>
+                          <span>Please add your Alpaca API keys first</span>
                         </div>
                       ) : (
                         <Link to="/backtest">
@@ -303,7 +427,7 @@ export default function Live() {
                   </div>
                 )}
               </CardContent>
-            </Card>
+            </Card> */}
 
             {/* Trading Configuration */}
             {!tradingStatus?.isActive && (
@@ -315,25 +439,15 @@ export default function Live() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Symbol Selection */}
                     <div className="space-y-2">
-                      <Label htmlFor="symbol">Symbol</Label>
-                      <Select value={symbol} onValueChange={setSymbol}>
-                        <SelectTrigger id="symbol">
-                          <SelectValue placeholder="Select a symbol" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {isLoadingSymbols ? (
-                            <div className="flex items-center justify-center p-4">
-                              <Loader2 className="h-5 w-5 animate-spin" />
-                            </div>
-                          ) : (
-                            symbols.map((s: Symbol) => (
-                              <SelectItem key={s.symbol} value={s.symbol}>
-                                {s.symbol} - {s.name}
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="symbol">Select Stock Symbols</Label>
+                      <ReactSelect
+                        options={groupedOptions}
+                        isMulti
+                        value={symbol}
+                        onChange={setSymbol}
+                        placeholder="Select symbols..."
+                        components={{ GroupHeading }}
+                      />
                     </div>
 
                     {/* Strategy Selection */}
@@ -357,6 +471,19 @@ export default function Live() {
                           )}
                         </SelectContent>
                       </Select>
+                    </div>
+
+                    {/* Maximum Capital */}
+                    <div className="space-y-2">
+                      <Label htmlFor="maxCapital">Maximum Capital</Label>
+                      <Input
+                        id="maxCapital"
+                        type="number"
+                        min="0"
+                        value={maxCapital}
+                        onChange={e => setMaxCapital(e.target.value)}
+                        placeholder="Enter maximum capital to allocate"
+                      />
                     </div>
                   </div>
 
@@ -441,6 +568,82 @@ export default function Live() {
           </div>
 
           {/* API Configuration */}
+          {/* <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle>Alpaca API Configuration</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="apiKey">API Key</Label>
+                  <Input
+                    id="apiKey"
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="Your Alpaca API key"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="secretKey">Secret Key</Label>
+                  <Input
+                    id="secretKey"
+                    type="password"
+                    value={secretKey}
+                    onChange={(e) => setSecretKey(e.target.value)}
+                    placeholder="Your Alpaca secret key"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center pt-2">
+                <div className="flex items-center gap-2">
+                  {keysSaved ? (
+                    <>
+                      <CheckCircle className="h-4 w-4 text-trading-profit" />
+                      <span className="text-sm text-trading-profit">API keys saved</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle className="h-4 w-4 text-amber-500" />
+                      <span className="text-sm text-amber-500">API keys required</span>
+                    </>
+                  )}
+                </div>
+                <Button
+                  onClick={() => {validateApiKeys()}}
+                  disabled={isSavingKeys || (!apiKey || !secretKey)}
+                  size="sm"
+                >
+                  {isSavingKeys ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Keys'
+                  )}
+                </Button>
+              </div>
+
+              <Separator className="my-4" />
+
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium">How to get API Keys:</h3>
+                <ol className="text-sm text-muted-foreground space-y-2 list-decimal pl-4">
+                  <li>Create an account on <a href="https://alpaca.markets" target="_blank" rel="noopener noreferrer" className="text-primary underline">Alpaca</a></li>
+                  <li>Navigate to Paper Trading in your dashboard</li>
+                  <li>Generate API keys for paper trading</li>
+                  <li>Copy and paste the keys here</li>
+                </ol>
+                <div className="bg-muted p-3 rounded-md text-sm">
+                  <strong>Note:</strong> We recommend starting with Paper Trading to test your strategies without risking real money.
+                </div>
+              </div>
+            </CardContent>
+          </Card> */}
+
+          {/* Zerodha API Configuration */}
           <Card className="shadow-sm">
             <CardHeader>
               <CardTitle>Zerodha API Configuration</CardTitle>
@@ -484,7 +687,7 @@ export default function Live() {
                   )}
                 </div>
                 <Button
-                  onClick={() => {validateApiKeys()}}
+                  onClick={() => saveApiKeys()}
                   disabled={isSavingKeys || (!apiKey || !secretKey)}
                   size="sm"
                 >
@@ -504,17 +707,93 @@ export default function Live() {
               <div className="space-y-4">
                 <h3 className="text-sm font-medium">How to get API Keys:</h3>
                 <ol className="text-sm text-muted-foreground space-y-2 list-decimal pl-4">
-                  <li>Create an account on <a href="https://alpaca.markets" target="_blank" rel="noopener noreferrer" className="text-primary underline">Zerodha</a></li>
-                  <li>Navigate to Paper Trading in your dashboard</li>
-                  <li>Generate API keys for paper trading</li>
+                  <li>Create an account on <a href="https://kite.trade/" target="_blank" rel="noopener noreferrer" className="text-primary underline">Zerodha Kite Connect</a></li>
+                  <li>Generate API and Secret keys from the developer console</li>
                   <li>Copy and paste the keys here</li>
                 </ol>
                 <div className="bg-muted p-3 rounded-md text-sm">
-                  <strong>Note:</strong> We recommend starting with Paper Trading to test your strategies without risking real money.
+                  <strong>Note:</strong> Ensure you have subscribed to the Kite Connect API to use these keys.
                 </div>
               </div>
             </CardContent>
           </Card>
+
+          {/* Zerodha Account Details */}
+          {/* <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle>Zerodha Account Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {accountDetails ? (
+                <div className="space-y-4">
+                  <div>
+                    <Label>Name</Label>
+                    <p>{accountDetails.user_name || "N/A"}</p>
+                  </div>
+                  <div>
+                    <Label>Account Balance</Label>
+                    <p>{accountDetails.balance ? `₹${accountDetails.balance}` : "N/A"}</p>
+                  </div>
+                  <div>
+                    <Label>Email</Label>
+                    <p>{accountDetails.email || "N/A"}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="apiKey">API Key</Label>
+                    <Input
+                      id="apiKey"
+                      type="password"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder="Your Zerodha API key"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="secretKey">Secret Key</Label>
+                    <Input
+                      id="secretKey"
+                      type="password"
+                      value={secretKey}
+                      onChange={(e) => setSecretKey(e.target.value)}
+                      placeholder="Your Zerodha secret key"
+                    />
+                  </div>
+                  <div className="flex justify-between items-center pt-2">
+                    <div className="flex items-center gap-2">
+                      {keysSaved ? (
+                        <>
+                          <CheckCircle className="h-4 w-4 text-trading-profit" />
+                          <span className="text-sm text-trading-profit">API keys saved</span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle className="h-4 w-4 text-amber-500" />
+                          <span className="text-sm text-amber-500">API keys required</span>
+                        </>
+                      )}
+                    </div>
+                    <Button
+                      onClick={() => saveApiKeys()}
+                      disabled={isSavingKeys || (!apiKey || !secretKey)}
+                      size="sm"
+                    >
+                      {isSavingKeys ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        'Save Keys'
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card> */}
         </div>
       </div>
     </Layout>

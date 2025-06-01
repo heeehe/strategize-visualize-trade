@@ -11,7 +11,7 @@ const backRoutes = require('./routes/backRoutes');
 app.get('/', (req, res) => {
     res.send('Hello, World!');
 });
-app.use('/api/validate-keys', authRoutes);
+app.use('/', authRoutes);
 app.use('/api/backtest', backRoutes);
 // Start server
 app.listen(PORT, () => {
