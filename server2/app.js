@@ -6,6 +6,7 @@ app.use(cors());
 app.use(express.json());
 const authRoutes = require('./routes/authRoutes'); // Import routes
 const backRoutes = require('./routes/backRoutes');
+const algo = require('./routes/algoroute'); // Import algo routes
 
 
 app.get('/', (req, res) => {
@@ -13,6 +14,7 @@ app.get('/', (req, res) => {
 });
 app.use('/', authRoutes);
 app.use('/api/backtest', backRoutes);
+app.use('/api/live', algo);
 // Start server
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);

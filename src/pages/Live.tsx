@@ -14,6 +14,7 @@ import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import axios from "axios";
+import { max } from "date-fns";
 
 export default function Live() {
   const [symbol, setSymbol] = useState("");
@@ -22,12 +23,106 @@ export default function Live() {
   const [apiKey, setApiKey] = useState("");
   const [secretKey, setSecretKey] = useState("");
   const [keysSaved, setKeysSaved] = useState(false);
+  const [accountDetails, setAccountDetails] = useState(null);
+  const [selectedSector, setSelectedSector] = useState("");
+  const [maxCapital, setMaxCapital] = useState(0);
 
   // Fetch available symbols
   const { data: symbols = [], isLoading: isLoadingSymbols } = useQuery({
     queryKey: ['symbols'],
-    queryFn: API.getAvailableCategories,
+    queryFn: API.getAvailableSymbols,
   });
+
+  const sector_stocks = {
+    "Banking & Financial Services": {
+      "IDBI": 377857,
+      "SOUTHBANK": 1522689,
+      "IOB": 2393089,
+      "PNB": 2730497,
+      "CANBK": 2763265,
+      "IDFCFIRSTB": 2863105,
+      "UCOBANK": 2873089,
+      "MAHABANK": 2912513,
+      "YESBANK": 3050241,
+      "CENTRALBK": 3812865,
+      "PSB": 5376257
+    },
+    "Energy & Power": {
+      "NLCINDIA": 2197761,
+      "JPPOWER": 3011329,
+      "SUZLON": 3076609,
+      "RENUKA": 3078657,
+      "RPOWER": 3906305,
+      "NHPC": 4454401,
+      "SJVN": 4834049
+    },
+    "Infrastructure & Engineering": {
+      "NCC": 593665,
+      "PNCINFRA": 2402561,
+      "TARMAT": 3781377,
+      "KNRCON": 3912449,
+      "IRB": 3920129,
+      "ASHOKA": 5166593,
+      "SALASAR": 5468673,
+      "NBCC": 8042241
+    },
+    "Chemicals & Specialty Materials": {
+      "GHCL": 288513,
+      "NOCIL": 625153,
+      "PIDILITIND": 681985,
+      "SRF": 837889,
+      "IGL": 2883073,
+      "KIRIINDUS": 4259585,
+      "VIKASECO": 6593537
+    },
+    "Iron & Steel": {
+      "HITECH": 734209,
+      "SAIL": 758529,
+      "TATASTEEL": 895745,
+      "JINDALSTEL": 1723649,
+      "RAMASTEEL": 2636801,
+      "MUKANDLTD": 2899201,
+      "JSWSTEEL": 3001089,
+      "MSPL": 3051265
+    },
+    "FMCG & Consumer Goods": {
+      "ADOR": 8705,
+      "BCLIND": 643329,
+      "HATSUN": 996353,
+      "HERITGFOOD": 1177089,
+      "VADILALIND": 6194177
+    },
+    "Textiles & Manufacturing": {
+      "ARVIND": 49409,
+      "RAYMOND": 731905,
+      "SRF": 837889,
+      "VARDMNPOLY": 933377,
+      "TRIDENT": 2479361,
+      "PAGEIND": 3689729,
+      "KPRMILL": 3817473
+    },
+    "Logistics & Transport": {
+      "MAHLOG": 98561,
+      "BLUEDART": 126721,
+      "CONCOR": 1215745,
+      "VRLLOG": 2226177,
+      "NAVKARCORP": 2702593,
+      "TCI": 2708481,
+      "ALLCARGO": 3456257
+    },
+    "Real Estate": {
+      "MAHLIFE": 2060801,
+      "SOBHA": 3539457,
+      "PHOENIXLTD": 3725313,
+      "DLF": 3771393,
+      "BRIGADE": 3887105,
+      "SUNTECK": 4516097,
+      "GODREJPROP": 4576001,
+      "OBEROIRLTY": 5181953,
+      "PRESTIGE": 5197313
+    }
+  }
+
 
   // Fetch available strategies
   const { data: strategies = [], isLoading: isLoadingStrategies } = useQuery({
@@ -61,7 +156,7 @@ export default function Live() {
   // Handle strategy change
   const handleStrategyChange = (id: string) => {
     setStrategyId(id);
-    
+
     // Initialize parameters with default values
     const strategy = strategies.find(s => s.id === id);
     if (strategy) {
@@ -110,16 +205,12 @@ export default function Live() {
   // Start trading mutation
   const { mutate: startTrading, isPending: isStarting } = useMutation({
     mutationFn: () => {
-      if (!symbol || !strategyId || !keysSaved) {
-        toast.error("Please fill in all required fields and save your API keys");
+      if (!selectedSector || !strategyId || maxCapital <= 0) {
+        toast.error("Please fill in all required fields");
         return Promise.reject();
       }
-      
-      return API.startLiveTrading(
-        symbol,
-        strategyId,
-        strategyParams
-      );
+      // Only send the required three parameters
+      return API.startLiveTrading(selectedSector, strategyId, maxCapital);
     },
     onSuccess: (success) => {
       if (success) {
@@ -147,7 +238,6 @@ export default function Live() {
       // Get request_token from URL params
       const requestToken = searchParams.get("request_token");
       const status = searchParams.get("status");
-      console.log(requestToken, "Request Token");
 
       // Retrieve apiKey and secretKey from local storage
       const apiKey = localStorage.getItem("apiKey");
@@ -155,9 +245,6 @@ export default function Live() {
 
       // Check if this is a Zerodha callback
       if (requestToken && status === "success" && apiKey && secretKey) {
-        console.log("Zerodha callback detected");
-
-        // Call your API to send the token, apiKey, and secretKey to the backend
         axios
           .post("http://localhost:3000/zerodha/callback", {
             request_token: requestToken,
@@ -165,11 +252,12 @@ export default function Live() {
             secretKey,
           })
           .then((response) => {
-            const { accessToken } = response.data;
+            const { accessToken, accountDetails } = response.data;
 
             // Save accessToken in local storage
             if (accessToken) {
-              localStorage.setItem("requestToken", accessToken);
+              localStorage.setItem("accessToken", accessToken);
+              setAccountDetails(accountDetails); // Save account details in state
               toast.success("Successfully authenticated with Zerodha");
             } else {
               toast.error("Access token not received from backend");
@@ -182,8 +270,6 @@ export default function Live() {
             toast.error("Failed to authenticate with Zerodha");
             console.error("Zerodha authentication error:", error);
           });
-      } else {
-        console.error("Missing requestToken, apiKey, or secretKey");
       }
     }, [searchParams, navigate]);
   }
@@ -204,7 +290,7 @@ export default function Live() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
             {/* Trading Status Card */}
-            <Card className="shadow-sm">
+            {/* <Card className="shadow-sm">
               <CardHeader>
                 <CardTitle>Trading Status</CardTitle>
               </CardHeader>
@@ -319,145 +405,183 @@ export default function Live() {
                   </div>
                 )}
               </CardContent>
-            </Card>
+            </Card> */}
 
             {/* Trading Configuration */}
-            {!tradingStatus?.isActive && (
-              <Card className="shadow-sm">
-                <CardHeader>
-                  <CardTitle>Trading Configuration</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Symbol Selection */}
-                    <div className="space-y-2">
-                      <Label htmlFor="symbol">Symbol</Label>
-                      <Select value={symbol} onValueChange={setSymbol}>
-                        <SelectTrigger id="symbol">
-                          <SelectValue placeholder="Select a symbol" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {isLoadingSymbols ? (
-                            <div className="flex items-center justify-center p-4">
-                              <Loader2 className="h-5 w-5 animate-spin" />
-                            </div>
-                          ) : (
-                            symbols.map((s: Symbol) => (
-                              <SelectItem key={s.symbol} value={s.symbol}>
-                                {s.symbol} - {s.name}
+            {/* {!tradingStatus?.isActive && ( */}
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle>Trading Configuration</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Symbol Selection */}
+                  <div className="space-y-2">
+                    <Label htmlFor="symbol">Symbol</Label>
+                    <Select value={selectedSector} onValueChange={(value) => {
+                      setSelectedSector(value);
+                      setSymbol(""); // Clear selected symbol when sector changes
+                    }}>
+                      <SelectTrigger id="sector">
+                        <SelectValue placeholder="Select a Sector" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.keys(sector_stocks).map((sector) => (
+                          <SelectItem key={sector} value={sector}>
+                            {sector}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {/* if you want to select a particular stock  */}
+                    {/* {selectedSector && (
+                      <div className="mt-4">
+                        <Label htmlFor="stock">Stock</Label>
+                        <Select value={symbol} onValueChange={setSymbol}>
+                          <SelectTrigger id="stock">
+                            <SelectValue placeholder="Select a Stock" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(sector_stocks[selectedSector]).map(([stockSymbol, id]) => (
+                              <SelectItem key={stockSymbol} value={stockSymbol}>
+                                {stockSymbol}
                               </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Strategy Selection */}
-                    <div className="space-y-2">
-                      <Label htmlFor="strategy">Strategy</Label>
-                      <Select value={strategyId} onValueChange={handleStrategyChange}>
-                        <SelectTrigger id="strategy">
-                          <SelectValue placeholder="Select a strategy" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {isLoadingStrategies ? (
-                            <div className="flex items-center justify-center p-4">
-                              <Loader2 className="h-5 w-5 animate-spin" />
-                            </div>
-                          ) : (
-                            strategies.map((s: Strategy) => (
-                              <SelectItem key={s.id} value={s.id}>
-                                {s.name}
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )} */}
                   </div>
 
-                  {/* Strategy Parameters */}
-                  {selectedStrategy && selectedStrategy.params.length > 0 && (
-                    <>
-                      <div className="border-t pt-6 mt-6">
-                        <h3 className="text-lg font-medium mb-4">Strategy Parameters</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          {selectedStrategy.params.map((param) => (
-                            <div key={param.name} className="space-y-2">
-                              <Label htmlFor={param.name}>
-                                {param.name.replace(/_/g, ' ')}
-                                <span className="ml-2 text-xs text-muted-foreground">
-                                  {param.description}
-                                </span>
-                              </Label>
-                              {param.type === 'number' ? (
-                                <div className="flex items-center gap-2">
-                                  <Input
-                                    id={param.name}
-                                    type="number"
-                                    min={param.min}
-                                    max={param.max}
-                                    step={param.step || 1}
-                                    value={strategyParams[param.name] || param.value}
-                                    onChange={(e) => handleParamChange(param.name, Number(e.target.value))}
-                                  />
-                                </div>
-                              ) : param.type === 'select' && param.options ? (
-                                <Select 
-                                  value={strategyParams[param.name]?.toString() || param.value?.toString()}
-                                  onValueChange={(v) => handleParamChange(param.name, v)}
-                                >
-                                  <SelectTrigger id={param.name}>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {param.options.map((option) => (
-                                      <SelectItem key={option} value={option}>
-                                        {option}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              ) : (
+                  {/* Strategy Selection */}
+                  <div className="space-y-2">
+                    <Label htmlFor="strategy">Strategy</Label>
+                    <Select value={strategyId} onValueChange={handleStrategyChange}>
+                      <SelectTrigger id="strategy">
+                        <SelectValue placeholder="Select a strategy" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Tejaswi-Strategy">
+                          Tejaswi-Strategy
+                        </SelectItem>
+
+                        {/* {isLoadingStrategies ? (
+                          <div className="flex items-center justify-center p-4">
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                          </div>
+                        ) : (
+                          strategies.map((s: Strategy) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name}
+                            </SelectItem>
+                          ))
+                        } */}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Maximum Capital  */}
+                  <div className="space-y-2">
+                    <Label htmlFor="capital">Maximum Capital</Label>
+                    <Input
+                      id="capital"
+                      type="number"
+                      placeholder="Enter maximum capital"
+                      value={maxCapital}
+                      onChange={(e) => setMaxCapital(Number(e.target.value))}
+                    />
+                  </div>
+                </div>
+
+                {/* Strategy Parameters */}
+                {selectedStrategy && selectedStrategy.params.length > 0 && (
+                  <>
+                    <div className="border-t pt-6 mt-6">
+                      <h3 className="text-lg font-medium mb-4">Strategy Parameters</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {selectedStrategy.params.map((param) => (
+                          <div key={param.name} className="space-y-2">
+                            <Label htmlFor={param.name}>
+                              {param.name.replace(/_/g, ' ')}
+                              <span className="ml-2 text-xs text-muted-foreground">
+                                {param.description}
+                              </span>
+                            </Label>
+                            {param.type === 'number' ? (
+                              <div className="flex items-center gap-2">
                                 <Input
                                   id={param.name}
-                                  value={strategyParams[param.name] || param.value}
-                                  onChange={(e) => handleParamChange(param.name, e.target.value)}
+                                  type="number"
+                                  min={param.min}
+                                  max={param.max}
+                                  step={param.step || 1}
+                                  value={maxCapital || ''}
+                                  onChange={(e) => {
+                                    const value = Number(e.target.value);
+                                    if (value <= 0) {
+                                      toast.error("Capital must be greater than 0");
+                                      return;
+                                    }
+                                    setMaxCapital(value);
+                                  }}
                                 />
-                              )}
-                            </div>
-                          ))}
-                        </div>
+                              </div>
+                            ) : param.type === 'select' && param.options ? (
+                              <Select
+                                value={strategyParams[param.name]?.toString() || param.value?.toString()}
+                                onValueChange={(v) => handleParamChange(param.name, v)}
+                              >
+                                <SelectTrigger id={param.name}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {param.options.map((option) => (
+                                    <SelectItem key={option} value={option}>
+                                      {option}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Input
+                                id={param.name}
+                                value={strategyParams[param.name] || param.value}
+                                onChange={(e) => handleParamChange(param.name, e.target.value)}
+                              />
+                            )}
+                          </div>
+                        ))}
                       </div>
-                    </>
-                  )}
+                    </div>
+                  </>
+                )}
 
-                  <div className="flex justify-end pt-4">
-                    <Button
-                      onClick={() => startTrading()}
-                      disabled={isStarting || !symbol || !strategyId || !keysSaved}
-                      className="gap-2"
-                    >
-                      {isStarting ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Starting...
-                        </>
-                      ) : (
-                        <>
-                          <Play className="h-4 w-4" />
-                          Start Trading
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+                <div className="flex justify-end pt-4">
+                  <Button
+                    onClick={() => startTrading()}
+                    disabled={!selectedSector || !strategyId || maxCapital<=0 }
+                    className="gap-2"
+                  >
+                    {isStarting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Starting...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-4 w-4" />
+                        Start Trading
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+            {/* )} */}
           </div>
 
           {/* API Configuration */}
-          <Card className="shadow-sm">
+          {/* <Card className="shadow-sm">
             <CardHeader>
               <CardTitle>Alpaca API Configuration</CardTitle>
             </CardHeader>
@@ -530,7 +654,159 @@ export default function Live() {
                 </div>
               </div>
             </CardContent>
+          </Card> */}
+
+          {/* Zerodha API Configuration */}
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle>Zerodha API Configuration</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="apiKey">API Key</Label>
+                  <Input
+                    id="apiKey"
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="Your Zerodha API key"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="secretKey">Secret Key</Label>
+                  <Input
+                    id="secretKey"
+                    type="password"
+                    value={secretKey}
+                    onChange={(e) => setSecretKey(e.target.value)}
+                    placeholder="Your Zerodha secret key"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center pt-2">
+                <div className="flex items-center gap-2">
+                  {keysSaved ? (
+                    <>
+                      <CheckCircle className="h-4 w-4 text-trading-profit" />
+                      <span className="text-sm text-trading-profit">API keys saved</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle className="h-4 w-4 text-amber-500" />
+                      <span className="text-sm text-amber-500">API keys required</span>
+                    </>
+                  )}
+                </div>
+                <Button
+                  onClick={() => validateApiKeys()}
+                  disabled={isSavingKeys || (!apiKey || !secretKey)}
+                  size="sm"
+                >
+                  {isSavingKeys ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Keys'
+                  )}
+                </Button>
+              </div>
+
+              <Separator className="my-4" />
+
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium">How to get API Keys:</h3>
+                <ol className="text-sm text-muted-foreground space-y-2 list-decimal pl-4">
+                  <li>Create an account on <a href="https://kite.trade/" target="_blank" rel="noopener noreferrer" className="text-primary underline">Zerodha Kite Connect</a></li>
+                  <li>Generate API and Secret keys from the developer console</li>
+                  <li>Copy and paste the keys here</li>
+                </ol>
+                <div className="bg-muted p-3 rounded-md text-sm">
+                  <strong>Note:</strong> Ensure you have subscribed to the Kite Connect API to use these keys.
+                </div>
+              </div>
+            </CardContent>
           </Card>
+
+          {/* Zerodha Account Details */}
+          {/* <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle>Zerodha Account Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {accountDetails ? (
+                <div className="space-y-4">
+                  <div>
+                    <Label>Name</Label>
+                    <p>{accountDetails.user_name || "N/A"}</p>
+                  </div>
+                  <div>
+                    <Label>Account Balance</Label>
+                    <p>{accountDetails.balance ? `₹${accountDetails.balance}` : "N/A"}</p>
+                  </div>
+                  <div>
+                    <Label>Email</Label>
+                    <p>{accountDetails.email || "N/A"}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="apiKey">API Key</Label>
+                    <Input
+                      id="apiKey"
+                      type="password"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder="Your Zerodha API key"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="secretKey">Secret Key</Label>
+                    <Input
+                      id="secretKey"
+                      type="password"
+                      value={secretKey}
+                      onChange={(e) => setSecretKey(e.target.value)}
+                      placeholder="Your Zerodha secret key"
+                    />
+                  </div>
+                  <div className="flex justify-between items-center pt-2">
+                    <div className="flex items-center gap-2">
+                      {keysSaved ? (
+                        <>
+                          <CheckCircle className="h-4 w-4 text-trading-profit" />
+                          <span className="text-sm text-trading-profit">API keys saved</span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle className="h-4 w-4 text-amber-500" />
+                          <span className="text-sm text-amber-500">API keys required</span>
+                        </>
+                      )}
+                    </div>
+                    <Button
+                      onClick={() => validateApiKeys()}
+                      disabled={isSavingKeys || (!apiKey || !secretKey)}
+                      size="sm"
+                    >
+                      {isSavingKeys ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        'Save Keys'
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card> */}
         </div>
       </div>
     </Layout>

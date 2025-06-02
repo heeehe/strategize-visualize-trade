@@ -97,122 +97,66 @@ export const API = {
     }
   },
   
-  // Symbols
-  // getAvailableSymbols: async (): Promise<Symbol[]> => {
-  //   // This would fetch from your backend
-  //   return [
-  //     { symbol: 'AAPL', name: 'Apple Inc.', type: 'stock', exchange: 'NASDAQ' },
-  //     { symbol: 'MSFT', name: 'Microsoft Corporation', type: 'stock', exchange: 'NASDAQ' },
-  //     { symbol: 'GOOGL', name: 'Alphabet Inc.', type: 'stock', exchange: 'NASDAQ' },
-  //     { symbol: 'AMZN', name: 'Amazon.com Inc.', type: 'stock', exchange: 'NASDAQ' },
-  //     { symbol: 'TSLA', name: 'Tesla, Inc.', type: 'stock', exchange: 'NASDAQ' },
-  //     { symbol: 'META', name: 'Meta Platforms Inc.', type: 'stock', exchange: 'NASDAQ' }
-  //   ];
-  // },
-  // getAvailableCategories: async (): Promise<{ category: string, stocks: Symbol[] }[]> => {
-  //   return [
-  //     {
-  //       category: 'Big Tech',
-  //       stocks: [
-  //         { symbol: 'AAPL', name: 'Apple Inc.', type: 'stock', exchange: 'NASDAQ' },
-  //         { symbol: 'MSFT', name: 'Microsoft Corporation', type: 'stock', exchange: 'NASDAQ' },
-  //         { symbol: 'GOOGL', name: 'Alphabet Inc.', type: 'stock', exchange: 'NASDAQ' },
-  //         { symbol: 'AMZN', name: 'Amazon.com Inc.', type: 'stock', exchange: 'NASDAQ' },
-  //         { symbol: 'META', name: 'Meta Platforms Inc.', type: 'stock', exchange: 'NASDAQ' }
-  //       ]
-  //     },
-  //     {
-  //       category: 'AI & Semiconductors',
-  //       stocks: [
-  //         { symbol: 'NVDA', name: 'NVIDIA Corporation', type: 'stock', exchange: 'NASDAQ' },
-  //         { symbol: 'AMD', name: 'Advanced Micro Devices, Inc.', type: 'stock', exchange: 'NASDAQ' },
-  //         { symbol: 'TSM', name: 'Taiwan Semiconductor Manufacturing Company', type: 'stock', exchange: 'NYSE' },
-  //         { symbol: 'INTC', name: 'Intel Corporation', type: 'stock', exchange: 'NASDAQ' }
-  //       ]
-  //     },
-  //     {
-  //       category: 'Electric Vehicles',
-  //       stocks: [
-  //         { symbol: 'TSLA', name: 'Tesla, Inc.', type: 'stock', exchange: 'NASDAQ' },
-  //         { symbol: 'NIO', name: 'NIO Inc.', type: 'stock', exchange: 'NYSE' },
-  //         { symbol: 'RIVN', name: 'Rivian Automotive, Inc.', type: 'stock', exchange: 'NASDAQ' },
-  //         { symbol: 'LCID', name: 'Lucid Group, Inc.', type: 'stock', exchange: 'NASDAQ' }
-  //       ]
-  //     },
-  //     {
-  //       category: 'Banking Giants',
-  //       stocks: [
-  //         { symbol: 'JPM', name: 'JPMorgan Chase & Co.', type: 'stock', exchange: 'NYSE' },
-  //         { symbol: 'BAC', name: 'Bank of America Corporation', type: 'stock', exchange: 'NYSE' },
-  //         { symbol: 'C', name: 'Citigroup Inc.', type: 'stock', exchange: 'NYSE' },
-  //         { symbol: 'GS', name: 'Goldman Sachs Group, Inc.', type: 'stock', exchange: 'NYSE' },
-  //         { symbol: 'WFC', name: 'Wells Fargo & Company', type: 'stock', exchange: 'NYSE' }
-  //       ]
-  //     }
-  //     // Add more categories if needed
-  //   ];
-  // },
+  
   getAvailableCategories: async (): Promise<{ category: string, symbols: string[] }[]> => {
-    const categories = {
-      "Bonds 📊": [
-        "bundtreur", "ukgilttrgbp", "ustbondtrusd"
-      ],
-      "Equity Indices 🌏": [
-        "chiidxusd",  // China A50 Index
-        "hkgidxhkd",  // Hong Kong 40 Index
-        "jpnidxjpy",  // Japan 225
-        "ausidxaud",  // Australia 200 Index
-        "indidxusd",  // India 50 Index
-        "sgdidxsgd"   // Singapore Blue Chip Cash Index
-      ],
-      "Agricultural commodities ☕": [
-        "cocoacmdusd", "coffeecmdusx", "cottoncmdusx", "ojuicecmdusx",
-        "soybeancmdusx", "sugarcmdusd"
-      ],
-      "Energy commodities ⚡": [
-        "dieselcmdusd", "brentcmdusd", "lightcmdusd", "gascmdusd"
-      ],
-      "Metals commodities ⚙️": [
-        "coppercmdusd", "xpdcmdusd", "xptcmdusd"
-      ],
-      "Germany ETFs 🇩🇪📈": [
-        "tecdaxedeeur"
-      ],
-      "France ETFs 🇫🇷📈": [
-        "dsbfreur", "lvcfreur", "lyxbnkfreur"
-      ],
-      "Hong Kong ETFs 🇭🇰📈": [
-        "2822hkhkd", "2828hkhkd", "2836hkhkd", "3188hkhkd"
-      ],
-      "United States ETFs 🇺🇸📈": [
-        "diaususd", "dvyususd", "eemususd", "efaususd", "embususd", "ewhususd",
-        "ewjususd", "ewwususd", "ewzususd", "ezuususd", "fxiususd", "gdxususd",
-        "gdxjususd", "gldususd", "ibbususd", "iefususd", "ijhususd", "ijrususd",
-        "iveususd", "ivwususd", "iwdususd", "iwfususd", "iwmususd", "iyrususd",
-        "jnkususd", "qqqususd", "slvususd", "spyususd", "tltususd", "usoususd",
-        "veaususd", "vgkususd", "vnqususd", "vxxususd", "xleususd", "xlfususd",
-        "xliususd", "xlkususd", "xlpususd", "xluususd", "xlvususd", "xlyususd",
-        "xopususd", "arkqususd", "arkxususd", "awayususd", "bitoususd", "btfususd",
-        "espoususd", "finxususd", "ftxgususd", "iakususd", "itaususd", "jetsususd",
-        "kieususd", "kreususd", "pbjususd", "pejususd", "ppaususd", "roboususd",
-        "vdeususd", "xresususd"
-      ],
-      "Forex currencies 💱": [
-        "audcad", "audchf", "audjpy", "audnzd", "audsgd", "cadchf", "cadhkd", "cadjpy",
-        "chfjpy", "chfsgd", "euraud", "eurcad", "eurchf", "eurczk", "eurdkk", "eurgbp",
-        "eurhkd", "eurhuf", "eurjpy", "eurnok", "eurnzd", "eurpln", "eursek", "eursgd",
-        "eurtry", "gbpaud", "gbpcad", "gbpchf", "gbpjpy", "gbpnzd", "hkdjpy", "nzdcad",
-        "nzdchf", "nzdjpy", "sgdjpy", "tryjpy", "usdaed", "usdcnh" // Truncated for brevity
-      ]
-    };
-  
-    // Mapping categories to the required structure
-    const categoryList = Object.keys(categories).map(category => ({
-      category,
-      symbols: categories[category]
-    }));
-  
-    return categoryList;
+    // These categories and symbols are now sourced from the backend config.js (sectorStocks)
+    // You should fetch from your backend API, but for now, hardcode to match config.js:
+    return [
+      {
+        category: "Banking & Financial Services",
+        symbols: [
+          "IDBI", "SOUTHBANK", "IOB", "PNB", "CANBK", "IDFCFIRSTB", "UCOBANK", "MAHABANK", "YESBANK", "CENTRALBK", "PSB"
+        ]
+      },
+      {
+        category: "Energy & Power",
+        symbols: [
+          "NLCINDIA", "JPPOWER", "SUZLON", "RENUKA", "RPOWER", "NHPC", "SJVN"
+        ]
+      },
+      {
+        category: "Infrastructure & Engineering",
+        symbols: [
+          "NCC", "PNCINFRA", "TARMAT", "KNRCON", "IRB", "ASHOKA", "SALASAR", "NBCC"
+        ]
+      },
+      {
+        category: "Chemicals & Specialty Materials",
+        symbols: [
+          "GHCL", "NOCIL", "PIDILITIND", "SRF", "IGL", "KIRIINDUS", "VIKASECO"
+        ]
+      },
+      {
+        category: "Iron & Steel",
+        symbols: [
+          "HITECH", "SAIL", "TATASTEEL", "JINDALSTEL", "RAMASTEEL", "MUKANDLTD", "JSWSTEEL", "MSPL"
+        ]
+      },
+      {
+        category: "FMCG & Consumer Goods",
+        symbols: [
+          "ADOR", "BCLIND", "HATSUN", "HERITGFOOD", "VADILALIND"
+        ]
+      },
+      {
+        category: "Textiles & Manufacturing",
+        symbols: [
+          "ARVIND", "RAYMOND", "SRF", "VARDMNPOLY", "TRIDENT", "PAGEIND", "KPRMILL"
+        ]
+      },
+      {
+        category: "Logistics & Transport",
+        symbols: [
+          "MAHLOG", "BLUEDART", "CONCOR", "VRLLOG", "NAVKARCORP", "TCI", "ALLCARGO"
+        ]
+      },
+      {
+        category: "Real Estate",
+        symbols: [
+          "MAHLIFE", "SOBHA", "PHOENIXLTD", "DLF", "BRIGADE", "SUNTECK", "GODREJPROP", "OBEROIRLTY", "PRESTIGE"
+        ]
+      }
+    ];
   },
   
 
@@ -322,15 +266,19 @@ export const API = {
   
   // Live Trading
   startLiveTrading: async (
-    symbol: string,
+    selectedSector: string,
     strategyId: string,
-    params: Record<string, any>
+    maxCapital: number
   ): Promise<boolean> => {
     try {
-      // This would connect to your backend to start the live trading
-      toast.info(`Starting live trading for ${symbol}...`);
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      toast.success(`Live trading started for ${symbol}`);
+      toast.info(`Starting live trading for ${selectedSector}...`);
+      // Replace the mock with a real API call:
+      await axios.post(`${API_BASE_URL}/api/live/start`, {
+        selectedSector,
+        strategyId,
+        maxCapital,
+      });
+      toast.success(`Live trading started for ${selectedSector}`);
       return true;
     } catch (error) {
       console.error("Failed to start live trading:", error);

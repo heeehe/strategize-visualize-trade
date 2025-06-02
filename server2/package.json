@@ -16,6 +16,7 @@
     "backtest": "^0.2.3",
     "connect": "^3.7.0",
     "cors": "^2.8.5",
+    "dayjs": "^1.11.13",
     "dukascopy-node": "^1.42.1",
     "express": "^4.21.2",
     "kite": "^0.0.1",

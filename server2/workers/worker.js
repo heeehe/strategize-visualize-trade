@@ -1,22 +1,77 @@
 // dataFetchWorker.js
 const { parentPort, workerData } = require("worker_threads");
-const { getHistoricalRates } = require("dukascopy-node");
+const { KiteConnect } = require("kiteconnect");
+const config = require("../config");
+const dayjs = require("dayjs");
+const axios = require("axios");
 
+const kc = new KiteConnect({
+  api_key: config.zerodha.apiKey,
+});
+kc.setAccessToken(config.zerodha.accessToken);
+
+// Helper to get instrument token from symbol
+function getInstrumentToken(symbol) {
+  for (const sector of Object.values(config.sectorStocks)) {
+    if (sector[symbol]) return sector[symbol];
+  }
+  return null;
+}
+
+// Fetch historical data from Zerodha Kite using HTTP API (like in symbolWorker.js)
+async function loadHistoricalBars(symbol, from, to, interval = "day") {
+  let instrumentToken = null;
+  for (const sector of Object.values(config.sectorStocks)) {
+    if (sector[symbol]) {
+      instrumentToken = sector[symbol];
+      break;
+    }
+  }
+  if (!instrumentToken) throw new Error(`No token for ${symbol}`);
+
+  const api_key = config.zerodha.apiKey;
+  const access_token = config.zerodha.accessToken;
+
+  const url = `https://api.kite.trade/instruments/historical/${instrumentToken}/${interval}?from=${from}&to=${to}`;
+
+  try {
+    const response = await axios.get(url, {
+      headers: {
+        'X-Kite-Version': '3',
+        'Authorization': `token ${api_key}:${access_token}`
+      }
+    });
+    const candles = response.data.data.candles;
+    // Return as [timestamp, open, high, low, close, volume] to match previous return type
+    return candles.map(c => [
+      new Date(c[0]).getTime(),
+      c[1], // open
+      c[2], // high
+      c[3], // low
+      c[4], // close
+      c[5]  // volume
+    ]);
+  } catch (err) {
+    console.error(`Error loading historical bars for ${symbol}:`, err.response?.data || err.message);
+    return [];
+  }
+}
+
+// Replace getHistoricalRatesZerodha with loadHistoricalBars in main worker logic
 (async () => {
   try {
     const { symbols, startDate, endDate } = workerData;
 
     const allData = await Promise.all(
       symbols.map(async symbolId => {
-        const raw = await getHistoricalRates({
-          instrument: symbolId,
-          dates: { from: new Date(startDate), to: new Date(endDate) },
-          timeframe: 'm5',
-          format: 'array'
-        });
+        // Use the same date format as before
+        const from = dayjs(startDate).format("YYYY-MM-DD");
+        const to = dayjs(endDate).format("YYYY-MM-DD");
+        // Use interval 'day' for daily bars, or '5minute' if you want intraday
+        const raw = await loadHistoricalBars(symbolId, from, to, "day");
         if (!raw || raw.length === 0) return null;
 
-        const timestamps = raw.map(d => new Date(d[0]).getTime());
+        const timestamps = raw.map(d => d[0]);
         const opens = raw.map(d => d[1]);
         const highs = raw.map(d => d[2]);
         const lows = raw.map(d => d[3]);

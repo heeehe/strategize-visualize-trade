@@ -1,65 +1,59 @@
-// divergenceScanner.h
+// ============================
+// File: divergenceScanner.h
+// ============================
 #pragma once
 #include <vector>
 #include <deque>
 #include <cmath>
 #include <ctime>
 #include <algorithm>
+#include <string>
+#include <map>
 
-// ─── Data structures ─────────────────────────────────────────────────
+// ─── Data Structures ────────────────────────────────────────────────
 struct Bar {
-    std::time_t time;  // epoch seconds (UTC)
+    std::time_t time;
     double open, high, low, close;
-    
+
     Bar() : time(0), open(0), high(0), low(0), close(0) {}
 };
 
 enum class DivergenceType { BULLISH, BEARISH };
 
-// ─── RSI-14 calculator ────────────────────────────────────────────────
+// ─── RSI Calculator ─────────────────────────────────────────────────
 class RSI14 {
-private:
     double avgGain = 0, avgLoss = 0;
     std::deque<double> gains, losses;
     bool initialized = false;
-    
+
 public:
-    // feed new bar-close, returns RSI or NAN if not ready
     double add(double close, double prevClose) {
         double change = close - prevClose;
-        double gain   = std::max(0.0, change);
-        double loss   = std::max(0.0, -change);
-        
+        double gain = std::max(0.0, change);
+        double loss = std::max(0.0, -change);
         gains.push_back(gain);
         losses.push_back(loss);
-        
+
         if (gains.size() > 14) {
             gains.pop_front();
             losses.pop_front();
         }
-        
+
         if (!initialized && gains.size() == 14) {
-            // first-time simple average
-            for (int i = 0; i < 14; ++i) {
-                avgGain += gains[i];
-                avgLoss += losses[i];
-            }
-            avgGain /= 14;
-            avgLoss /= 14;
+            avgGain = std::accumulate(gains.begin(), gains.end(), 0.0) / 14;
+            avgLoss = std::accumulate(losses.begin(), losses.end(), 0.0) / 14;
             initialized = true;
         } else if (initialized) {
-            // Wilder's smoothing
             avgGain = (avgGain * 13 + gain) / 14;
             avgLoss = (avgLoss * 13 + loss) / 14;
         }
-        
+
         if (!initialized) return NAN;
         if (avgLoss == 0) return 100.0;
-        
         double rs = avgGain / avgLoss;
         return 100.0 - (100.0 / (1 + rs));
     }
-    
+
     void reset() {
         avgGain = 0;
         avgLoss = 0;
@@ -69,92 +63,223 @@ public:
     }
 };
 
-// ─── Divergence scanner ───────────────────────────────────────────────
-class DivergenceScanner {
-private:
-    RSI14 rsiCalc;
-    int lookback;
-    double tol;
+// ─── ATR Calculator ─────────────────────────────────────────────────
+class ATRCalculator {
+    int period;
+    std::deque<double> trList;
+    double prevClose = NAN;
 
 public:
+    ATRCalculator(int p) : period(p) {}
+
+    double add(const Bar& b) {
+        if (std::isnan(prevClose)) {
+            prevClose = b.close;
+            return NAN;
+        }
+
+        double tr = std::max({ b.high - b.low, fabs(b.high - prevClose), fabs(b.low - prevClose) });
+        trList.push_back(tr);
+        prevClose = b.close;
+
+        if (trList.size() > period)
+            trList.pop_front();
+
+        if (trList.size() < period)
+            return NAN;
+
+        double sum = std::accumulate(trList.begin(), trList.end(), 0.0);
+        return sum / period;
+    }
+
+    void reset() {
+        trList.clear();
+        prevClose = NAN;
+    }
+};
+
+// ─── Trade Struct (for Backtest) ─────────────────────────────────────
+struct Trade {
+    std::string date;
+    std::string type;
+    std::string symbol;
+    double price;
+    int shares;
+    double profit;
+    std::string reason;
+};
+
+// ─── Equity Point Struct ─────────────────────────────────────────────
+struct EquityPoint {
+    std::string date;
+    double value;
+};
+
+// ─── Backtest Strategy ───────────────────────────────────────────────
+class BacktestStrategy {
     std::vector<Bar> bars;
-    std::vector<double> rsis;
-    
-    // lookback = min bars between pivots, tol = double-top/bot tolerance
-    DivergenceScanner(int lookbackBars = 6, double priceTol = 0.005)
-        : lookback(lookbackBars), tol(priceTol) {}
+    std::vector<double> closeHistory;
+    std::vector<double> rsiHistory;
 
-    // call per new completed bar; returns true if divergence found
-    bool onNewBar(const Bar& b,
-                  DivergenceType &outType,
-                  int &idx1, int &idx2) {
-        bars.push_back(b);
-        int n = bars.size();
-        if (n < 16) return false;  // need at least 14 RSI + pivots
+    std::string symbol;
+    double capital;
+    bool stopFlag = false;
 
-        // compute new RSI
-        double prevClose = bars[n-2].close;
-        double r = rsiCalc.add(b.close, prevClose);
-        rsis.push_back(r);
-        if (std::isnan(r)) return false;
+    RSI14 rsiCalc;
+    ATRCalculator* atrCalc = nullptr;
 
-        // check pivot at i2 = n-2 (previous bar, as current bar just completed)
-        int i2 = n - 2;
-        if (i2 < 1 || i2 >= n - 1) return false; // need bars before and after for pivot detection
-        
-        bool isHigh = (bars[i2].high > bars[i2-1].high && bars[i2].high > bars[i2+1].high);
-        bool isLow  = (bars[i2].low  < bars[i2-1].low  && bars[i2].low  < bars[i2+1].low);
-        if (!isHigh && !isLow) return false;
+    struct ActiveTrade {
+        double entryPrice;
+        double trailHigh;
+        double atrAtEntry;
+    };
 
-        // scan for prior pivot i1 in valid range
-        int startIdx = std::max(2, i2 - lookback);
-        for (int i1 = i2 - lookback; i1 >= startIdx && i1 >= 2; --i1) {
-            bool wasHigh = (bars[i1].high > bars[i1-1].high && bars[i1].high > bars[i1+1].high);
-            bool wasLow  = (bars[i1].low  < bars[i1-1].low  && bars[i1].low  < bars[i1+1].low);
-            
-            if (isHigh && wasHigh) {
-                double p1 = bars[i1].high, p2 = bars[i2].high;
-                double r1 = rsis[i1], r2 = rsis[i2];
-                
-                // double-top case: prices similar but RSI lower
-                if (std::fabs(p2 - p1)/p1 < tol && r2 < r1) {
-                    outType = DivergenceType::BEARISH;
-                    idx1 = i1; idx2 = i2;
-                    return true;
-                }
-                // classic bearish divergence: higher high but lower RSI
-                if (p2 > p1 && r2 < r1) {
-                    outType = DivergenceType::BEARISH;
-                    idx1 = i1; idx2 = i2;
-                    return true;
-                }
+    std::map<std::string, ActiveTrade> activeTrades;
+    std::vector<Trade> trades;
+    std::vector<EquityPoint> equity;
+
+    struct Settings {
+        int atrPeriod;
+        double atrMultiplier;
+        bool rsiExit;
+    };
+
+    Settings settings;
+
+    Settings getSectorSettings(const std::string& sector) {
+        if (sector == "Banking & Financial Services") return {14, 2.0, true};
+        if (sector == "Energy & Power") return {10, 2.5, true};
+        if (sector == "Infrastructure & Engineering") return {14, 1.5, false};
+        if (sector == "Chemicals & Specialty Materials") return {14, 1.2, false};
+        if (sector == "Iron & Steel") return {14, 2.0, false};
+        if (sector == "Textiles & Manufacturing") return {14, 1.5, false};
+        if (sector == "Logistics & Real Estate") return {14, 2.0, true};
+        return {14, 2.0, false};
+    }
+
+    std::string timeToDate(std::time_t t) {
+        return std::to_string(t);
+    }
+
+public:
+    BacktestStrategy(const std::string& sector, double initialCapital) {
+        settings = getSectorSettings(sector);
+        capital = initialCapital;
+        atrCalc = new ATRCalculator(settings.atrPeriod);
+    }
+
+    ~BacktestStrategy() {
+        delete atrCalc;
+    }
+
+    void setSymbol(const std::string& sym) {
+        symbol = sym;
+    }
+
+    void onNewBar(const Bar& bar) {
+        bars.push_back(bar);
+        closeHistory.push_back(bar.close);
+
+        double atr = atrCalc->add(bar);
+        double rsi = bars.size() > 1 ? rsiCalc.add(bar.close, bars[bars.size() - 2].close) : NAN;
+
+        if (!std::isnan(rsi))
+            rsiHistory.push_back(rsi);
+
+        if (rsiHistory.size() > 100) rsiHistory.erase(rsiHistory.begin());
+        if (bars.size() > 100) bars.erase(bars.begin());
+        if (closeHistory.size() > 100) closeHistory.erase(closeHistory.begin());
+
+        // Exit logic
+        if (activeTrades.count(symbol)) {
+            auto& trade = activeTrades[symbol];
+            double newTrailHigh = std::max(trade.trailHigh, bar.close);
+            double exitLevel = trade.entryPrice + (settings.atrMultiplier * trade.atrAtEntry);
+            double gain = (bar.close - trade.entryPrice) / trade.entryPrice * 100.0;
+
+            bool shouldExit =
+                (bar.close <= exitLevel && (!settings.rsiExit || rsi < 55)) ||
+                gain >= 15 ||
+                bar.close <= trade.entryPrice * 1.05;
+
+            if (shouldExit) {
+                Trade t;
+                t.date = timeToDate(bar.time);
+                t.type = "sell";
+                t.symbol = symbol;
+                t.price = bar.close;
+                int shares = trades.back().shares;
+                t.shares = shares;
+                t.profit = (bar.close - trade.entryPrice) * shares;
+                capital += bar.close * shares;
+                t.reason = "Exit (trailing strategy)";
+                trades.push_back(t);
+
+                capital += bar.close;
+                activeTrades.erase(symbol);
+
+                if (capital <= 0) stopFlag = true;
+                return;
             }
-            
-            if (isLow && wasLow) {
-                double p1 = bars[i1].low, p2 = bars[i2].low;
-                double r1 = rsis[i1], r2 = rsis[i2];
-                
-                // double-bottom case: prices similar but RSI higher
-                if (std::fabs(p2 - p1)/p1 < tol && r2 > r1) {
-                    outType = DivergenceType::BULLISH;
-                    idx1 = i1; idx2 = i2;
-                    return true;
-                }
-                // classic bullish divergence: lower low but higher RSI
-                if (p2 < p1 && r2 > r1) {
-                    outType = DivergenceType::BULLISH;
-                    idx1 = i1; idx2 = i2;
-                    return true;
-                }
+
+            trade.trailHigh = newTrailHigh;
+        }
+
+        // Entry logic
+        std::string signal = detectDivergence();
+        if (!signal.empty() && activeTrades.count(symbol) == 0 && !std::isnan(atr)) {
+            int shares = 15;
+            double cost = shares * bar.close;
+            if (capital >= cost) {
+                activeTrades[symbol] = {bar.close, bar.close, atr};
+                capital -= cost;
+
+                Trade t;
+                t.date = timeToDate(bar.time);
+                t.type = "buy";
+                t.symbol = symbol;
+                t.price = bar.close;
+                t.shares = shares;
+                t.profit = 0;
+                t.reason = signal;
+                trades.push_back(t);
             }
         }
-        return false;
+
+        equity.push_back({timeToDate(bar.time), capital});
     }
-    
-    // Reset the scanner for new symbol
-    void reset() {
-        bars.clear();
-        rsis.clear();
-        rsiCalc.reset();
+
+    std::string detectDivergence() {
+        if (bars.size() < 20 || rsiHistory.size() < 20) return "";
+
+        int recent = bars.size() - 1;
+        int past = recent - 10;
+
+        double priceNow = bars[recent].close;
+        double pricePrev = bars[past].close;
+        double highNow = bars[recent].high;
+        double highPrev = bars[past].high;
+        double lowNow = bars[recent].low;
+        double lowPrev = bars[past].low;
+
+        double rsiNow = rsiHistory[rsiHistory.size() - 1];
+        double rsiPrev = rsiHistory[rsiHistory.size() - 11];
+
+        bool isDoubleTop = std::abs(highNow - highPrev) / highPrev < 0.01;
+        bool isDoubleBottom = std::abs(lowNow - lowPrev) / lowPrev < 0.01;
+
+        if (highNow > highPrev && rsiNow < rsiPrev) return "Bearish Divergence";
+        if (lowNow < lowPrev && rsiNow > rsiPrev) return "Bullish Divergence";
+        if (isDoubleTop && rsiNow < rsiPrev) return "Bearish Double Top Divergence";
+        if (isDoubleBottom && rsiNow > rsiPrev) return "Bullish Double Bottom Divergence";
+        if (priceNow > pricePrev && rsiNow <= rsiPrev) return "Weak Bearish Divergence";
+        if (priceNow < pricePrev && rsiNow >= rsiPrev) return "Weak Bullish Divergence";
+
+        return "";
     }
+
+    bool shouldStop() const { return stopFlag; }
+    double getCapital() const { return capital; }
+    const std::vector<Trade>& getTrades() const { return trades; }
+    const std::vector<EquityPoint>& getEquity() const { return equity; }
 };
