@@ -13,6 +13,7 @@ import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import axios from "axios";
+import { max } from "date-fns";
 
 export default function Live() {
   const [symbol, setSymbol] = useState("");
@@ -23,7 +24,7 @@ export default function Live() {
   const [keysSaved, setKeysSaved] = useState(false);
   const [accountDetails, setAccountDetails] = useState(null);
   const [selectedSector, setSelectedSector] = useState("");
-  const [maxCapital, setMaxCapital] = useState<number>(0);
+  const [maxCapital, setMaxCapital] = useState(0);
 
   // Fetch available symbols
   const { data: symbols = [], isLoading: isLoadingSymbols } = useQuery({
@@ -203,17 +204,12 @@ export default function Live() {
   // Start trading mutation
   const { mutate: startTrading, isPending: isStarting } = useMutation({
     mutationFn: () => {
-      if (!selectedSector || !strategyId|| maxCapital<=0
-      ) {
+      if (!selectedSector || !strategyId || maxCapital <= 0) {
         toast.error("Please fill in all required fields");
         return Promise.reject();
       }
-
-      return API.startLiveTrading(
-        symbol,
-        strategyId,
-        strategyParams
-      );
+      // Only send the required three parameters
+      return API.startLiveTrading(selectedSector, strategyId, maxCapital);
     },
     onSuccess: (success) => {
       if (success) {
@@ -478,7 +474,7 @@ export default function Live() {
                               {s.name}
                             </SelectItem>
                           ))
-                        )} */}
+                        } */}
                       </SelectContent>
                     </Select>
                   </div>
@@ -490,8 +486,8 @@ export default function Live() {
                       id="capital"
                       type="number"
                       placeholder="Enter maximum capital"
-                      value={strategyParams.max_capital || ''}
-                      onChange={(e) => handleParamChange('max_capital', Number(e.target.value))}
+                      value={maxCapital}
+                      onChange={(e) => setMaxCapital(Number(e.target.value))}
                     />
                   </div>
                 </div>
@@ -562,7 +558,7 @@ export default function Live() {
                 <div className="flex justify-end pt-4">
                   <Button
                     onClick={() => startTrading()}
-                    disabled={!selectedSector || !strategyId }
+                    disabled={!selectedSector || !strategyId || maxCapital<=0 }
                     className="gap-2"
                   >
                     {isStarting ? (

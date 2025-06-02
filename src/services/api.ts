@@ -323,15 +323,19 @@ export const API = {
   
   // Live Trading
   startLiveTrading: async (
-    symbol: string,
+    selectedSector: string,
     strategyId: string,
-    params: Record<string, any>
+    maxCapital: number
   ): Promise<boolean> => {
     try {
-      // This would connect to your backend to start the live trading
-      toast.info(`Starting live trading for ${symbol}...`);
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      toast.success(`Live trading started for ${symbol}`);
+      toast.info(`Starting live trading for ${selectedSector}...`);
+      // Replace the mock with a real API call:
+      await axios.post(`${API_BASE_URL}/api/live/start`, {
+        selectedSector,
+        strategyId,
+        maxCapital,
+      });
+      toast.success(`Live trading started for ${selectedSector}`);
       return true;
     } catch (error) {
       console.error("Failed to start live trading:", error);
