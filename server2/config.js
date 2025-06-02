@@ -1,7 +1,7 @@
 module.exports = {
     zerodha: {
         apiKey: process.env.ZERODHA_API_KEY || '6jtwltogwhji2myg',
-        accessToken: process.env.ZERODHA_ACCESS_TOKEN || 'srj1RGWUkkik5ckvoMAn770NGknhpG7e',
+        accessToken: process.env.ZERODHA_ACCESS_TOKEN || 'XVg0AM5FYDjree1fjW5FwaSqVTOyOpz2',
         // Add other Zerodha-specific configurations here
     },
     sectorStocks: {

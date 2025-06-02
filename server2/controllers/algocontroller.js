@@ -5,6 +5,7 @@ const { Worker } = require('worker_threads');
 const path = require('path');
 const config = require('../config'); // Adjust path as necessary
 const fs = require('fs');
+const { executeTrade } = require('./tradeController'); // Adjust path as necessary
 
 const app = express();
 app.use(cors());
@@ -41,14 +42,36 @@ exports.startLiveTrading = async (req, res) => {
       workerData: { symbol, strategyId, maxCapital, sector: selectedSector }
     });
 
-    worker.on('message', (msg) => {
+    worker.on('message', async(msg) => {
       if (msg.type === 'stop-all') {
         stopAllWorkers(msg.reason);
         return;
       }
 
       console.log(`[Signal] ${msg.symbol} | ${msg.date} | ${msg.signal}`);
-      signalLog.push(msg);
+      if (msg.signal.includes('Buy')) {
+        const tradeResult = await executeTrade({
+          tradingsymbol: msg.symbol,
+          exchange: "NSE",
+          transaction_type: "BUY",
+          quantity: 1,
+          order_type: "MARKET",
+          product: "CNC"
+        });
+        signalLog.push({ ...msg, execution: tradeResult });
+      } else if (msg.signal.includes('Exit')) {
+        const tradeResult = await executeTrade({
+          tradingsymbol: msg.symbol,
+          exchange: "NSE",
+          transaction_type: "SELL",
+          quantity: 1,
+          order_type: "MARKET",
+          product: "CNC"
+        });
+        signalLog.push({ ...msg, execution: tradeResult });
+      } else {
+        signalLog.push(msg);
+      }
       //fs.appendFileSync('signal_log.json', JSON.stringify(msg) + '\n');
     });
 
